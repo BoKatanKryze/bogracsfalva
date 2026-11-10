@@ -1,5 +1,7 @@
 # 🏡 Bográcsfalva – Interaktív 3D Közösségi Falu (WebGL / Three.js Portfólió Projekt)
 
+🌐 **Élő Demó (GitHub Pages):** **[https://bokatankryze.github.io/bogracsfalva/](https://bokatankryze.github.io/bogracsfalva/)**
+
 Interaktív, valós idejű **3D közösségi falu szimuláció** böngészőben, külső build-lépés nélkül (Vanilla ES Modules + **Three.js**), regisztrációmentes szobaberendezéssel, meghívókulcsos zárt házakkal és évszak-/időjárás-szimulációval.
 
 ---
