@@ -918,6 +918,181 @@
       background: var(--green);
       transition: width .1s linear;
     }
+
+    /* Leaderboard / Ranglista és Dobogó (Podium) */
+    .lb-subtabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .lb-subtab {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #d4af37;
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font: 700 12px Georgia, serif;
+      cursor: pointer;
+      transition: all .15s;
+      text-align: center;
+    }
+    .lb-subtab.active {
+      background: linear-gradient(135deg, #d4af37 0%, #aa8214 100%);
+      color: #fff;
+      box-shadow: 0 3px 8px rgba(170,130,20,.3);
+    }
+    .podium-wrap {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 8px;
+      margin: 10px 0 16px;
+      padding: 8px 4px;
+    }
+    .podium-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      min-width: 0;
+    }
+    .podium-card {
+      width: 100%;
+      border-radius: 12px;
+      padding: 10px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,.08);
+      position: relative;
+    }
+    .podium-card.rank-1 {
+      background: linear-gradient(180deg, #fff9e6 0%, #ffe082 100%);
+      border: 2px solid #d4af37;
+      min-height: 128px;
+      box-shadow: 0 6px 16px rgba(212,175,55,.35);
+    }
+    .podium-card.rank-2 {
+      background: linear-gradient(180deg, #f5f7fa 0%, #cfd8dc 100%);
+      border: 1.5px solid #90a4ae;
+      min-height: 112px;
+    }
+    .podium-card.rank-3 {
+      background: linear-gradient(180deg, #fdf5e6 0%, #d7ccc8 100%);
+      border: 1.5px solid #bcaaa4;
+      min-height: 100px;
+    }
+    .podium-card.is-me {
+      box-shadow: 0 0 0 2px #22c55e, 0 6px 16px rgba(34,197,94,.3);
+    }
+    .podium-badge {
+      font-size: 18px;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+    .podium-card.rank-1 .podium-badge {
+      font-size: 24px;
+    }
+    .podium-name {
+      font: 700 12px Georgia, serif;
+      color: var(--ink);
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 95%;
+    }
+    .podium-title {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 95%;
+    }
+    .podium-score {
+      font: 700 12.5px Georgia, serif;
+      color: #7c2d12;
+      background: rgba(255,255,255,.8);
+      padding: 2px 6px;
+      border-radius: 8px;
+      margin-top: auto;
+    }
+    .podium-subscore {
+      font-size: 9.5px;
+      color: #666;
+      margin-top: 2px;
+    }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 9px;
+      background: #fff;
+      border: 1px solid #ebdcc5;
+      margin-bottom: 5px;
+      font-size: 12.5px;
+    }
+    .lb-row.is-me {
+      background: #f0fdf4;
+      border: 1.5px solid #22c55e;
+      box-shadow: 0 2px 8px rgba(34,197,94,.18);
+    }
+    .lb-rank-num {
+      font: 700 12px Georgia, serif;
+      color: var(--muted);
+      min-width: 24px;
+      text-align: center;
+    }
+    .lb-user-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .lb-user-info b {
+      display: block;
+      color: var(--ink);
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lb-user-info span {
+      display: block;
+      font-size: 10.5px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lb-scores {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .lb-scores .primary-score {
+      font: 700 12.5px Georgia, serif;
+      color: #7c2d12;
+      display: block;
+    }
+    .lb-scores .secondary-score {
+      font-size: 10px;
+      color: #888;
+      display: block;
+    }
+    .lb-footer-bar {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: #fbf8f0;
+      border: 1px solid #e5d7ba;
+      border-radius: 8px;
+      font-size: 11.5px;
+    }
     #menu-toast {
       margin-top: 8px;
       padding: 8px 10px;
@@ -1175,6 +1350,7 @@
       <div id="main-btn-row" class="btn-row">
         <button id="my-house-btn" class="pill-btn home-btn" type="button">🏠 Saját házam</button>
         <button id="activities-open" class="pill-btn gold" type="button">🎒 Falusi Menü & Munka</button>
+        <button id="leaderboard-open-btn" class="pill-btn gold" type="button">🏆 Ranglista</button>
         <button id="claim-open" class="pill-btn" type="button">🔑 Belépés</button>
         <button id="add-open" class="pill-btn" type="button">🏡 Telek foglalása</button>
         <button id="chronicle-open" class="pill-btn" type="button">📜 Krónika</button>
@@ -1288,6 +1464,7 @@
       <button class="act-tab" data-acttab="rest" type="button">🍲 Pihenés</button>
       <button class="act-tab" data-acttab="shop" type="button">🛋️ Bútorbolt</button>
       <button class="act-tab" data-acttab="community" type="button">🏛️ Küldetés & Szavazás</button>
+      <button class="act-tab" data-acttab="leaderboard" type="button">🏆 Ranglista</button>
     </div>
 
     <div id="work-progress-box" hidden>
@@ -1465,6 +1642,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=20261110-6"></script>
+  <script type="module" src="./app.js?v=20261110-7"></script>
 </body>
 </html>

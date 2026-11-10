@@ -584,7 +584,7 @@ const PLACES = {
   kocsma: {
     name: 'A Falusi Kocsma',
     since: 'A 3. napon épült',
-    x: 15, z: 9, r: 4.0,
+    x: 18, z: 12, r: 4.5,
     at: 'a kocsmánál', to: 'a kocsmához',
     story: 'A falu 84-12-re a kocsmát szavazta meg a könyvtár helyett. A hordók mindig tele vannak.',
     actions: [
@@ -595,7 +595,7 @@ const PLACES = {
   vadaszhaz: {
     name: 'A Vadászház',
     since: 'A 4. napon épült',
-    x: -36, z: -32, r: 4.5,
+    x: -36, z: -34, r: 5.0,
     at: 'a vadászháznál', to: 'a vadászházhoz',
     story: 'Az északi folyóparton, a sűrű erdő szélén áll. Innen indulnak a vadászok és a favágók.',
     actions: [
@@ -674,6 +674,7 @@ const ACTION_MENU_ITEMS = [
   { id: 'act_menu_hub', title: 'Falusi Élet & Tevékenységek Központ (Főmenü)', sub: 'Munka, Pihenés, Bútorbolt, Barkácsolás és Napi Küldetések', type: 'act_tab', tab: 'work' },
   { id: 'act_shop', title: 'Bútorbolt és Barkácsműhely (Új 3D bútorok)', sub: 'Vásárolj vagy barkácsolj lámpát, könyvespolcot, növényt a szobádba', type: 'act_tab', tab: 'shop' },
   { id: 'act_quests', title: 'Napi Küldetések és Falugyűlés Szavazás', sub: 'Szavazz a falu következő épületére és szerezz jutalom Tallért', type: 'act_tab', tab: 'community' },
+  { id: 'act_leaderboard', title: 'Falusi Ranglista & Dicsőségfal (XP és Tallér)', sub: 'Kövesd az élmezőnyt és a lakosok toplistáját (Top 3 kiemelve)', type: 'act_tab', tab: 'leaderboard' },
   { id: 'act_walk', title: 'Vándorlás és Séta (WASD + Mobil érintőpad mód)', sub: 'Szabad séta saját karakterrel a faluban', type: 'walk' },
   { id: 'act_fire', title: 'Főtér: Falugyűlés, Korzózás és Téli Karácsonyfa', sub: 'A falu központi főtere (télen tábortűzzel és karácsonyfával)', type: 'place', placeKey: 'tuz' },
   { id: 'act_room', title: 'Szobaberendezés és Ajándékozás', sub: 'Bútorok lerakása, zárt ház meghívólink, ajándék', type: 'my_room' },
@@ -696,7 +697,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261110-6';
+const APP_VERSION = '20261110-7';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -908,32 +909,33 @@ const VILLAGE_ROADS = [
   { x1: 14.0, z1: 46.0, x2: 4.0, z2: 38.0, width: 2.5 },
   { x1: 4.0, z1: 38.0, x2: 0, z2: 36.0, width: 2.6 },
 
-  // 6. Keleti Horgász és Tóparti út
+  // 6. Keleti Horgász korzó és Kocsma bevezető út (kikerüli a Kocsmát: a korzó z=3.5-nél fut, a Kocsma épülete z=12-nél van!)
   { x1: 0, z1: 3.5, x2: 14.0, z2: 3.5, width: 2.6 },
-  { x1: 14.0, z1: 3.5, x2: 26.0, z2: 3.5, width: 2.6 },
-  { x1: 26.0, z1: 3.5, x2: 36.0, z2: 3.0, width: 2.5 },
+  { x1: 14.0, z1: 3.5, x2: 24.0, z2: 3.5, width: 2.6 },
+  { x1: 24.0, z1: 3.5, x2: 36.0, z2: 3.0, width: 2.5 },
   { x1: 36.0, z1: 3.0, x2: 44.0, z2: 5.0, width: 2.5 },
   { x1: 44.0, z1: 5.0, x2: 52.0, z2: 4.0, width: 2.5 },
   { x1: 14.0, z1: 3.5, x2: 12.0, z2: 20.0, width: 2.5 },
+  { x1: 18.0, z1: 3.5, x2: 18.0, z2: 8.0, width: 2.4 }, // Sétány a Kocsma bejáratához
 
   // 7. Északi Főutca (x=0)
   { x1: 0, z1: -19.5, x2: 0, z2: -36.0, width: 3.0 },
   { x1: 0, z1: -36.0, x2: 0, z2: -50.0, width: 2.8 },
 
-  // 8. Észak-Nyugati Vadon út
-  { x1: 0, z1: -19.5, x2: -14.0, z2: -20.0, width: 2.6 },
-  { x1: -14.0, z1: -20.0, x2: -24.0, z2: -20.0, width: 2.6 },
-  { x1: -24.0, z1: -20.0, x2: -36.0, z2: -16.0, width: 2.5 },
-  { x1: -36.0, z1: -16.0, x2: -46.0, z2: -20.0, width: 2.5 },
-  { x1: -14.0, z1: -20.0, x2: -12.0, z2: -27.0, width: 2.5 },
-  { x1: -12.0, z1: -27.0, x2: -12.0, z2: -48.0, width: 2.5 },
-  { x1: -12.0, z1: -48.0, x2: 0, z2: -48.0, width: 2.5 },
+  // 8. Észak-Nyugati Vadász és Solymász út (Közvetlenül a Vadászházhoz (-36, -34) és Solymászhoz (-38, -46) vezet, TÁVOL a folyótól!)
+  { x1: 0, z1: -28.0, x2: -14.0, z2: -28.0, width: 2.5 },
+  { x1: -14.0, z1: -28.0, x2: -14.0, z2: -48.0, width: 2.5 },
+  { x1: -14.0, z1: -48.0, x2: 0, z2: -48.0, width: 2.5 },
+  { x1: -14.0, z1: -48.0, x2: -24.0, z2: -48.0, width: 2.5 },
+  { x1: -24.0, z1: -48.0, x2: -34.0, z2: -42.0, width: 2.5 },
+  { x1: -34.0, z1: -42.0, x2: -36.0, z2: -34.0, width: 2.5 }, // Vadászház bejárata
+  { x1: -24.0, z1: -48.0, x2: -38.0, z2: -46.0, width: 2.4 }, // Solymász Bence bevezető útja
 
-  // 9. Észak-Keleti Gyümölcsös út
-  { x1: 0, z1: -19.5, x2: 14.0, z2: -20.0, width: 2.6 },
-  { x1: 14.0, z1: -20.0, x2: 24.0, z2: -20.0, width: 2.6 },
-  { x1: 24.0, z1: -20.0, x2: 32.0, z2: -18.0, width: 2.5 },
-  { x1: 32.0, z1: -18.0, x2: 44.0, z2: -24.0, width: 2.5 },
+  // 9. Észak-Keleti Gyümölcsös és Piac út (TÁVOL a folyótól)
+  { x1: 0, z1: -20.0, x2: 14.0, z2: -20.0, width: 2.5 },
+  { x1: 14.0, z1: -20.0, x2: 24.0, z2: -20.0, width: 2.5 },
+  { x1: 24.0, z1: -20.0, x2: 34.0, z2: -18.0, width: 2.5 },
+  { x1: 34.0, z1: -18.0, x2: 44.0, z2: -24.0, width: 2.5 },
   { x1: 44.0, z1: -24.0, x2: 48.0, z2: -36.0, width: 2.5 },
   { x1: 48.0, z1: -36.0, x2: 44.0, z2: -48.0, width: 2.5 },
   { x1: 14.0, z1: -20.0, x2: 14.0, z2: -24.0, width: 2.5 },
@@ -1401,39 +1403,80 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   registerLandmark('hid', g, 2.5, 2.5);
 }
 
-// 4.3 Kocsma
+// 4.3 Kocsma (A Falusi Kocsma tágas sörkerttel és sétánnyal a falu utcája mellett)
 {
   const g = new THREE.Group();
-  g.position.set(PLACES.kocsma.x, 0, PLACES.kocsma.z - 4.2);
+  g.position.set(PLACES.kocsma.x, 0, PLACES.kocsma.z);
   g.add(box(7.2, 2.8, 5.4, 0xf2e8cf, 0, 1.4, 0));
   const roof = new THREE.Mesh(new THREE.ConeGeometry(5.6, 2.6, 4), mat(0x9e3b24));
   roof.position.set(0, 4.1, 0);
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
   g.add(roof);
-  g.add(box(1.2, 1.9, 0.15, 0x5a3a22, 0, 0.95, 2.72));
+
+  // Bejárati ajtó (észak felé, a bevezető sétány és a korzó felé nézve)
+  g.add(box(1.2, 1.9, 0.15, 0x5a3a22, 0, 0.95, -2.72));
+
+  // Tágas sörkert kinti fa asztalokkal és padokkal az utca és a kocsma között
   for (const dx of [-2.4, 2.4]) {
-    g.add(box(1.8, 0.6, 0.9, 0x8a5a33, dx, 0.3, 4.2));
+    g.add(box(1.8, 0.6, 0.9, 0x8a5a33, dx, 0.3, -4.2));
+    g.add(box(1.6, 0.35, 0.35, 0x5a3a22, dx, 0.18, -4.9));
+    g.add(box(1.6, 0.35, 0.35, 0x5a3a22, dx, 0.18, -3.5));
   }
-  g.add(cyl(0.45, 0.45, 1.0, 0x6b4423, -3.0, 0.5, 2.9, 8));
+  // Boros és sörös hordók
+  g.add(cyl(0.45, 0.45, 1.0, 0x6b4423, -3.0, 0.5, -2.9, 8));
+  g.add(cyl(0.38, 0.38, 0.85, 0x6b4423, -3.7, 0.42, -2.7, 8));
+
+  // Sörkert kövezett alapja
+  const patio = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.04, 5.8), mat(0xd5c8af));
+  patio.position.set(0, 0.02, -3.5);
+  patio.receiveShadow = true;
+  g.add(patio);
+
   registerLandmark('kocsma', g, 4.5, 5.5);
 }
 
-// 4.4 Vadászház
+// 4.4 Vadászház (Erdei vadásztábor céltáblákkal, tábortűzzel és fa rakásokkal)
 {
   const g = new THREE.Group();
-  g.position.set(PLACES.vadaszhaz.x, 0, PLACES.vadaszhaz.z - 3.5);
+  g.position.set(PLACES.vadaszhaz.x, 0, PLACES.vadaszhaz.z);
   g.add(box(6.0, 2.5, 4.8, 0x74482a, 0, 1.25, 0));
   const roof = new THREE.Mesh(new THREE.ConeGeometry(4.8, 2.4, 4), mat(0x3b5e3c));
   roof.position.set(0, 3.7, 0);
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
   g.add(roof);
-  for (let i = 0; i < 3; i++) {
-    const log = cyl(0.22, 0.22, 2.2, 0x9a6a3c, 3.6, 0.22 + i * 0.38, 0, 6);
+
+  // Bejárati ajtó és veranda
+  g.add(box(1.0, 1.8, 0.12, 0x4a2e16, 0, 0.9, 2.42));
+  const porchRoof = box(3.2, 0.15, 1.4, 0x3b5e3c, 0, 2.2, 3.0);
+  porchRoof.rotation.x = 0.12;
+  const pillarL = cyl(0.08, 0.08, 2.1, 0x4a2e16, -1.4, 1.05, 3.5);
+  const pillarR = cyl(0.08, 0.08, 2.1, 0x4a2e16, 1.4, 1.05, 3.5);
+  g.add(porchRoof, pillarL, pillarR);
+
+  // Céltábla (Archery Target) a vadászathoz
+  const targetPost = cyl(0.08, 0.08, 2.0, 0x4a2e16, 4.5, 1.0, 1.0);
+  const targetStraw = cyl(0.65, 0.65, 0.12, 0xd4a373, 4.5, 1.3, 1.0);
+  targetStraw.rotation.x = Math.PI / 2;
+  const targetRing = cyl(0.42, 0.42, 0.13, 0xc8343a, 4.5, 1.3, 1.0);
+  targetRing.rotation.x = Math.PI / 2;
+  const targetBull = cyl(0.18, 0.18, 0.14, 0xffd166, 4.5, 1.3, 1.0);
+  targetBull.rotation.x = Math.PI / 2;
+  g.add(targetPost, targetStraw, targetRing, targetBull);
+
+  // Felaprított fa rakatok (Firewood)
+  for (let i = 0; i < 4; i++) {
+    const log = cyl(0.22, 0.22, 2.2, 0x9a6a3c, -3.8, 0.22 + i * 0.38, 0.8, 6);
     log.rotation.x = Math.PI / 2;
     g.add(log);
   }
+
+  // Vadászati útjelző tábla
+  const signpost = box(0.9, 0.22, 0.06, 0x7c4f2a, -3.2, 1.6, 3.2);
+  signpost.rotation.y = 0.35;
+  g.add(cyl(0.08, 0.08, 1.8, 0x4a2e16, -3.2, 0.9, 3.2), signpost);
+
   registerLandmark('vadaszhaz', g, 4.2, 5.0);
 }
 
@@ -2000,10 +2043,27 @@ const VILLAGE_CIRCUITS = {
     [14, 3.5], [26, 3.5], [36, 3], [44, 5], [52, 4], [44, 5], [36, 3], [14, 3.5], [12, 20], [0, 20], [0, 3.5]
   ],
   NW_MAIN: [
-    [-14, -20], [-24, -20], [-36, -16], [-12, -27], [-12, -48], [0, -48], [0, -36], [0, -19.5]
+    [-36, -34],
+    [-34, -42],
+    [-24, -48],
+    [-14, -48],
+    [-14, -28],
+    [0, -28],
+    [0, -36],
+    [0, -48],
+    [-14, -48],
+    [-24, -48]
   ],
   NE_MAIN: [
-    [14, -20], [24, -20], [32, -18], [44, -24], [48, -36], [44, -48], [0, -48], [0, -36], [0, -19.5]
+    [0, -28],
+    [14, -28],
+    [24, -24],
+    [34, -24],
+    [44, -26],
+    [48, -36],
+    [44, -48],
+    [0, -48],
+    [0, -36]
   ],
   FOTER_SOUTH: [
     [0, 3.5], [0, 20], [12, 20], [20, 25], [30, 32], [4, 38], [0, 36], [-4, 38], [-11, 20], [0, 20]
@@ -3147,6 +3207,7 @@ function savePlayerRpg(syncToServer = true) {
   playerRpg.lastEnergyUpdate = playerRpg.lastEnergyUpdate || Date.now();
   localStorage.setItem(getStorageKeyForUser(currentConnectedUser), JSON.stringify(playerRpg));
   updatePlayerStatsUI();
+  queueCloudLeaderboardPush();
   if (syncToServer && currentConnectedUser) {
     apiFetch('/api/rpg/sync', {
       method: 'POST',
@@ -3195,6 +3256,172 @@ function updatePlayerStatsUI() {
   el('stat-resources').innerHTML = `<span>🪵 Fa: <b>${r.fa}</b></span> · <span>🌾 Liszt: <b>${r.liszt}</b></span> · <span>🐟 Hal: <b>${r.hal}</b></span> · <span>🥛 Tej: <b>${r.tej}</b></span>`;
 }
 updatePlayerStatsUI();
+
+// --- 11.3 MEGOSZTOTT ÉLŐ FELHŐ-SZINKRONIZÁCIÓ (api.restful-api.dev) & RANGLISTA (LEADERBOARD) ---
+const CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1c6cb684f00d7';
+
+let cloudState = {
+  votes: { pekseg: 52, ortorony: 40, konyvtar: 28 },
+  leaderboard: {}
+};
+let cloudLastSyncedAt = null;
+let leaderboardMetric = 'xp'; // 'xp' vagy 'coins'
+
+// A falu 24 kanonikus lakója saját kiinduló XP-vel és Tallérral a Ranglistán
+const CANONICAL_LEADERBOARD = [
+  { name: 'gulyas_mester', displayName: 'Gulyás Mester (Dev)', title: 'Főszakács & Fejlesztő', xp: 950, coins: 680, isNpc: true },
+  { name: 'csapos_bela', displayName: 'Csapos Béla', title: 'Kocsmáros', xp: 580, coins: 490, isNpc: true },
+  { name: 'solyom_bence', displayName: 'Sólyom Bence', title: 'Fősolymász', xp: 520, coins: 410, isNpc: true },
+  { name: 'vadasz_dani', displayName: 'Vadász Dani', title: 'Fővadász', xp: 480, coins: 360, isNpc: true },
+  { name: 'langos_laci', displayName: 'Lángos Laci', title: 'Piacos Pékmester', xp: 440, coins: 390, isNpc: true },
+  { name: 'harcsa_huba', displayName: 'Harcsa Huba', title: 'Öreg Főhorgász', xp: 410, coins: 340, isNpc: true },
+  { name: 'piacos_marika', displayName: 'Piacos Marika', title: 'Kofaasszony', xp: 390, coins: 430, isNpc: true },
+  { name: 'mehesz_mate', displayName: 'Méhész Máté', title: 'Méhészmester', xp: 370, coins: 310, isNpc: true },
+  { name: 'szaki_jani', displayName: 'Szaki Jani', title: 'Kovács & Ezermester', xp: 350, coins: 300, isNpc: true },
+  { name: 'almabor_akos', displayName: 'Almabor Ákos', title: 'Falusi Borász', xp: 320, coins: 280, isNpc: true },
+  { name: 'citeras_csabi', displayName: 'Citerás Csabi', title: 'Falusi Dalnok', xp: 310, coins: 250, isNpc: true },
+  { name: 'kalandor_lili', displayName: 'Kalandor Lili', title: 'Vándor Felfedező', xp: 290, coins: 220, isNpc: true },
+  { name: 'pecas_peti', displayName: 'Pecás Peti', title: 'Horgásztanonc', xp: 270, coins: 210, isNpc: true },
+  { name: 'sajtos_bandi', displayName: 'Sajtos Bandi', title: 'Sajtmester', xp: 250, coins: 260, isNpc: true },
+  { name: 'kukta_kata', displayName: 'Kukta Kata', title: 'Segédszakács', xp: 240, coins: 190, isNpc: true },
+  { name: 'bogyos_zsuzsi', displayName: 'Bogyós Zsuzsi', title: 'Füvesasszony', xp: 220, coins: 230, isNpc: true },
+  { name: 'tulparti_tomi', displayName: 'Túlparti Tomi', title: 'Révészlegény', xp: 200, coins: 180, isNpc: true },
+  { name: 'kandallo_krisz', displayName: 'Kandalló Krisz', title: 'Fahasogató', xp: 190, coins: 170, isNpc: true },
+  { name: 'pipas_pista', displayName: 'Pipás Pista', title: 'Öreg Krónikás', xp: 180, coins: 160, isNpc: true },
+  { name: 'vadmalac_viki', displayName: 'Vadmalac Viki', title: 'Erdei Nyomolvasó', xp: 170, coins: 150, isNpc: true },
+  { name: 'erdo_betyar', displayName: 'Erdő Betyár', title: 'Betyárvezér', xp: 160, coins: 240, isNpc: true },
+  { name: 'torzsvendeg_feri', displayName: 'Törzsvendég Feri', title: 'Kocsmai Szónok', xp: 140, coins: 120, isNpc: true },
+  { name: 'kobor_kevin', displayName: 'Kóbor Kevin', title: 'Falusi Csalavér', xp: 120, coins: 110, isNpc: true },
+  { name: 'szundi_szabi', displayName: 'Szundi Szabi', title: 'Főtéri Álomszuszék', xp: 90, coins: 80, isNpc: true }
+];
+
+function updateVoteBannerUI() {
+  const v = (cloudState && cloudState.votes) || (playerRpg && playerRpg.votes) || { pekseg: 52, ortorony: 40, konyvtar: 28 };
+  const txt = el('vote-text');
+  if (txt) {
+    txt.innerHTML = `Szavazás állása: <b>Pékség (${v.pekseg || 0})</b> · <b>Őrtorony (${v.ortorony || 0})</b> · <b>Könyvtár (${v.konyvtar || 0})</b>`;
+  }
+}
+
+async function fetchCloudState() {
+  try {
+    const res = await fetch(CLOUD_SYNC_URL);
+    if (!res.ok) return;
+    const body = await res.json();
+    if (body && body.data) {
+      if (body.data.votes) {
+        cloudState.votes = { ...cloudState.votes, ...body.data.votes };
+        if (playerRpg) {
+          playerRpg.votes = { ...playerRpg.votes, ...cloudState.votes };
+        }
+        updateVoteBannerUI();
+      }
+      if (body.data.leaderboard) {
+        cloudState.leaderboard = { ...cloudState.leaderboard, ...body.data.leaderboard };
+      }
+      cloudLastSyncedAt = Date.now();
+      if (!el('activities-drawer').hidden && (activeMenuTab === 'community' || activeMenuTab === 'leaderboard')) {
+        renderActivitiesContent();
+      }
+    }
+  } catch (err) {
+    console.warn('Cloud sync hiba:', err);
+  }
+}
+
+async function pushCloudVote(voteKey, prevKey = null) {
+  try {
+    let currentData = { votes: { pekseg: 52, ortorony: 40, konyvtar: 28 }, leaderboard: {} };
+    try {
+      const getRes = await fetch(CLOUD_SYNC_URL);
+      if (getRes.ok) {
+        const body = await getRes.json();
+        if (body && body.data) currentData = body.data;
+      }
+    } catch { /* fallback */ }
+
+    currentData.votes = currentData.votes || {};
+    if (prevKey && currentData.votes[prevKey] !== undefined) {
+      currentData.votes[prevKey] = Math.max(0, currentData.votes[prevKey] - 1);
+    }
+    currentData.votes[voteKey] = (currentData.votes[voteKey] || 0) + 1;
+
+    if (currentConnectedUser && playerRpg) {
+      currentData.leaderboard = currentData.leaderboard || {};
+      const { title } = getPlayerLevelInfo();
+      currentData.leaderboard[currentConnectedUser] = {
+        name: currentConnectedUser,
+        displayName: currentConnectedUser,
+        title,
+        xp: playerRpg.xp,
+        coins: playerRpg.coins,
+        lastActive: Date.now()
+      };
+    }
+
+    const patchRes = await fetch(CLOUD_SYNC_URL, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: currentData })
+    });
+    if (patchRes.ok) {
+      const patchBody = await patchRes.json();
+      if (patchBody && patchBody.data) {
+        cloudState.votes = patchBody.data.votes;
+        if (playerRpg) playerRpg.votes = { ...playerRpg.votes, ...cloudState.votes };
+        updateVoteBannerUI();
+      }
+    }
+  } catch (err) {
+    console.warn('Szavazat felhőbe küldési hiba:', err);
+  }
+}
+
+let pushLeaderboardTimeout = null;
+function queueCloudLeaderboardPush() {
+  if (!playerRpg) return;
+  const username = currentConnectedUser || 'vendeg_jatekos';
+  if (pushLeaderboardTimeout) clearTimeout(pushLeaderboardTimeout);
+  pushLeaderboardTimeout = setTimeout(async () => {
+    try {
+      const { title } = getPlayerLevelInfo();
+      const patchObj = {
+        name: username,
+        displayName: currentConnectedUser || 'Vándor (Te)',
+        title,
+        xp: playerRpg.xp,
+        coins: playerRpg.coins,
+        lastActive: Date.now()
+      };
+      cloudState.leaderboard[username] = patchObj;
+
+      let currentData = { votes: cloudState.votes, leaderboard: cloudState.leaderboard };
+      try {
+        const res = await fetch(CLOUD_SYNC_URL);
+        if (res.ok) {
+          const body = await res.json();
+          if (body && body.data) currentData = body.data;
+        }
+      } catch { /* fallback */ }
+
+      currentData.leaderboard = currentData.leaderboard || {};
+      currentData.leaderboard[username] = patchObj;
+
+      await fetch(CLOUD_SYNC_URL, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: currentData })
+      });
+      cloudLastSyncedAt = Date.now();
+    } catch (err) {
+      console.warn('Leaderboard felhőbe küldési hiba:', err);
+    }
+  }, 1500);
+}
+
+// Felhő DB kezdeti lekérése és 8 másodpercenkénti automatikus frissítése
+fetchCloudState();
+setInterval(fetchCloudState, 8000);
 
 // Kezdéskor nem kötjük be erőszakkal a fejlesztői karaktert (gulyas_mester) vendégként,
 // a látogató tiszta vendégként indul, és a "🔑 Belépés" vagy "🏠 Saját házam" gombbal léphet be / foglalhat telket:
@@ -3553,21 +3780,22 @@ function renderActivitiesContent() {
   }
 
   if (activeMenuTab === 'community') {
-    // 1. Szavazás szekció
+    // 1. Szavazás szekció (Élő felhő DB szinkronizációval!)
     const voteOptions = [
       { key: 'pekseg', label: '🥐 Falusi Pékség és Kemence' },
       { key: 'ortorony', label: '🗼 Magas Fenyő Őrtorony' },
       { key: 'konyvtar', label: '📚 Falusi Könyvtár és Olvasókör' },
     ];
+    const liveVotes = (cloudState && cloudState.votes) || playerRpg.votes;
     for (const vo of voteOptions) {
-      const count = playerRpg.votes[vo.key] || 0;
+      const count = liveVotes[vo.key] || 0;
       const isChosen = playerRpg.stats.votedOption === vo.key;
       const card = document.createElement('div');
       card.className = 'menu-item-card';
       card.innerHTML = `
         <div class="menu-item-info">
           <b>${vo.label}</b>
-          <span>Jelenlegi szavazatok: <b>${count} db</b></span>
+          <span>Jelenlegi szavazatok: <b>${count} db</b> <small style="color:var(--muted); font-size:11px;">(Élő felhő DB)</small></span>
           ${isChosen ? '<span class="reward-tag">✓ Erre szavaztál!</span>' : ''}
         </div>
       `;
@@ -3575,18 +3803,16 @@ function renderActivitiesContent() {
       btn.type = 'button';
       btn.className = 'menu-act-btn';
       btn.textContent = isChosen ? '✓ Szavazatod' : '🗳️ Szavazok';
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         if (playerRpg.stats.votedOption === vo.key) return;
-        if (playerRpg.stats.votedOption) {
-          playerRpg.votes[playerRpg.stats.votedOption] = Math.max(0, (playerRpg.votes[playerRpg.stats.votedOption] || 1) - 1);
-        } else {
+        const prev = playerRpg.stats.votedOption;
+        if (!playerRpg.stats.votedOption) {
           playerRpg.xp += 15;
         }
         playerRpg.stats.votedOption = vo.key;
-        playerRpg.votes[vo.key] = (playerRpg.votes[vo.key] || 0) + 1;
         savePlayerRpg();
-        el('vote-text').innerHTML = `Szavazás állása: <b>Pékség (${playerRpg.votes.pekseg})</b> · <b>Őrtorony (${playerRpg.votes.ortorony})</b>`;
-        showMenuToast(`🗳️ Leadtad a szavazatodat erre: ${vo.label}!`);
+        showMenuToast(`🗳️ Szavazatodat beküldtük a felhőbe: ${vo.label}!`);
+        await pushCloudVote(vo.key, prev);
         renderActivitiesContent();
       });
       card.append(btn);
@@ -3623,6 +3849,148 @@ function renderActivitiesContent() {
       card.append(btn);
       container.append(card);
     }
+    return;
+  }
+
+  if (activeMenuTab === 'leaderboard') {
+    // 1. Metrika választó fülek (XP vagy Tallér)
+    const subtabs = document.createElement('div');
+    subtabs.className = 'lb-subtabs';
+    subtabs.innerHTML = `
+      <button class="lb-subtab ${leaderboardMetric === 'xp' ? 'active' : ''}" type="button" data-metric="xp">✨ Legtöbb XP (Tapasztalat)</button>
+      <button class="lb-subtab ${leaderboardMetric === 'coins' ? 'active' : ''}" type="button" data-metric="coins">🪙 Legtöbb Tallér (Vagyon)</button>
+    `;
+    subtabs.querySelectorAll('.lb-subtab').forEach((b) => {
+      b.addEventListener('click', () => {
+        leaderboardMetric = b.dataset.metric;
+        renderActivitiesContent();
+      });
+    });
+    container.append(subtabs);
+
+    // 2. Adatok összeállítása: 24 kanonikus lakos + Cloud játékosok + Aktív látogató
+    const map = new Map();
+    for (const c of CANONICAL_LEADERBOARD) {
+      map.set(c.name, { ...c });
+    }
+    if (cloudState && cloudState.leaderboard) {
+      for (const [k, v] of Object.entries(cloudState.leaderboard)) {
+        if (map.has(k)) {
+          const ex = map.get(k);
+          ex.xp = Math.max(ex.xp, v.xp || 0);
+          ex.coins = Math.max(ex.coins, v.coins || 0);
+          if (v.title) ex.title = v.title;
+        } else {
+          map.set(k, {
+            name: k,
+            displayName: v.displayName || k,
+            title: v.title || 'Falusi Polgár',
+            xp: v.xp || 0,
+            coins: v.coins || 0,
+            isNpc: false
+          });
+        }
+      }
+    }
+
+    const activeUser = currentConnectedUser || 'vendeg_jatekos';
+    const { title: myTitle } = getPlayerLevelInfo();
+    const myEntry = map.get(activeUser) || {
+      name: activeUser,
+      displayName: currentConnectedUser ? `@${currentConnectedUser}` : 'Vándor (Te)',
+      title: myTitle,
+      xp: playerRpg.xp,
+      coins: playerRpg.coins,
+      isNpc: false
+    };
+    myEntry.xp = playerRpg.xp;
+    myEntry.coins = playerRpg.coins;
+    myEntry.title = myTitle;
+    map.set(activeUser, myEntry);
+
+    const list = Array.from(map.values());
+    list.sort((a, b) => {
+      const valA = leaderboardMetric === 'xp' ? a.xp : a.coins;
+      const valB = leaderboardMetric === 'xp' ? b.xp : b.coins;
+      if (valB !== valA) return valB - valA;
+      return leaderboardMetric === 'xp' ? b.coins - a.coins : b.xp - a.xp;
+    });
+
+    // 3. Kiemelve a három toplistásat (Podium / Dobogó: 2. Hely - 1. Hely - 3. Hely)
+    const top1 = list[0];
+    const top2 = list[1];
+    const top3 = list[2];
+
+    const podiumWrap = document.createElement('div');
+    podiumWrap.className = 'podium-wrap';
+
+    const renderPodiumCard = (entry, rank, cls, badge) => {
+      if (!entry) return '';
+      const isMe = entry.name === currentConnectedUser || (!currentConnectedUser && entry.name === 'vendeg_jatekos');
+      const primaryVal = leaderboardMetric === 'xp' ? `${entry.xp} XP` : `${entry.coins} 🪙`;
+      const secondaryVal = leaderboardMetric === 'xp' ? `${entry.coins} Tallér` : `${entry.xp} XP`;
+      return `
+        <div class="podium-card ${cls} ${isMe ? 'is-me' : ''}">
+          <div class="podium-badge">${badge}</div>
+          <div class="podium-name" title="${entry.displayName}">${entry.displayName}${isMe ? ' (Te)' : ''}</div>
+          <div class="podium-title">${entry.title}</div>
+          <div class="podium-score">${primaryVal}</div>
+          <div class="podium-subscore">${secondaryVal}</div>
+        </div>
+      `;
+    };
+
+    podiumWrap.innerHTML = `
+      <div class="podium-col">${renderPodiumCard(top2, 2, 'rank-2', '🥈 2. Hely')}</div>
+      <div class="podium-col">${renderPodiumCard(top1, 1, 'rank-1', '👑 1. Hely')}</div>
+      <div class="podium-col">${renderPodiumCard(top3, 3, 'rank-3', '🥉 3. Hely')}</div>
+    `;
+    container.append(podiumWrap);
+
+    // 4. További ranglista sorok (4. helytől kezdve)
+    const listWrap = document.createElement('div');
+    listWrap.className = 'menu-card-list';
+    for (let i = 3; i < list.length; i++) {
+      const it = list[i];
+      const isMe = it.name === currentConnectedUser || (!currentConnectedUser && it.name === 'vendeg_jatekos');
+      const primaryVal = leaderboardMetric === 'xp' ? `${it.xp} XP` : `${it.coins} Tallér`;
+      const secondaryVal = leaderboardMetric === 'xp' ? `${it.coins} Tallér` : `${it.xp} XP`;
+
+      const row = document.createElement('div');
+      row.className = `lb-row ${isMe ? 'is-me' : ''}`;
+      row.innerHTML = `
+        <span class="lb-rank-num">${i + 1}.</span>
+        <div class="lb-user-info">
+          <b>${it.displayName}${isMe ? ' <span class="reward-tag" style="display:inline-block; margin-left:4px;">(Te)</span>' : ''}</b>
+          <span>${it.title}</span>
+        </div>
+        <div class="lb-scores">
+          <span class="primary-score">${primaryVal}</span>
+          <span class="secondary-score">${secondaryVal}</span>
+        </div>
+      `;
+      listWrap.append(row);
+    }
+    container.append(listWrap);
+
+    // 5. Élő Felhő Szinkronizáció lábléc és azonnali frissítés gomb
+    const footer = document.createElement('div');
+    footer.className = 'lb-footer-bar';
+    const lastSyncTxt = cloudLastSyncedAt ? `Frissítve: ${new Date(cloudLastSyncedAt).toLocaleTimeString('hu-HU')}` : 'Élő szinkron aktív';
+    footer.innerHTML = `
+      <span>🟢 Felhő DB: <b>${lastSyncTxt}</b></span>
+      <button id="lb-refresh-btn" class="mini-btn" type="button">🔄 Élő frissítés</button>
+    `;
+    footer.querySelector('#lb-refresh-btn').addEventListener('click', async () => {
+      const b = footer.querySelector('#lb-refresh-btn');
+      b.textContent = '⏳ Frissül...';
+      b.disabled = true;
+      await fetchCloudState();
+      b.textContent = '✓ Kész';
+      setTimeout(() => renderActivitiesContent(), 300);
+    });
+    container.append(footer);
+    return;
   }
 }
 
@@ -3672,6 +4040,10 @@ el('activities-open').addEventListener('click', () => {
   else el('activities-drawer').hidden = true;
 });
 el('activities-open-top').addEventListener('click', () => openActivitiesDrawer('work'));
+el('leaderboard-open-btn')?.addEventListener('click', () => {
+  if (el('activities-drawer').hidden || activeMenuTab !== 'leaderboard') openActivitiesDrawer('leaderboard');
+  else el('activities-drawer').hidden = true;
+});
 el('vote-open-menu-btn').addEventListener('click', () => openActivitiesDrawer('community'));
 el('activities-close').addEventListener('click', () => { el('activities-drawer').hidden = true; });
 
@@ -4101,15 +4473,15 @@ function isObstacleBlocked(x, z, radius = 0.45) {
   }
 
   // B) Nagyobb nevezetes épületek
-  if (Math.abs(x - 19) < 3.8 + radius && Math.abs(z - 9) < 3.2 + radius) return true; // Kocsma
-  if (Math.abs(x - (-32)) < 3.5 + radius && Math.abs(z - 28) < 3.0 + radius) return true; // Vadászház
+  if (Math.abs(x - 18) < 3.5 + radius && Math.abs(z - 12) < 2.8 + radius) return true; // Kocsma épület (18, 12)
+  if (Math.abs(x - (-36)) < 3.4 + radius && Math.abs(z - (-34)) < 3.0 + radius) return true; // Vadászház (-36, -34)
   if (Math.hypot(x - 38, z - 34) < 2.3 + radius) return true; // Szélmalom
   if (Math.hypot(x - PLACES.tuz.x, z - PLACES.tuz.z) < 1.55 + radius) return true; // Főtér kút/tűz középpont
   if (Math.hypot(x - (-18), z - (-8)) < 1.25 + radius) return true; // Gémekút
 
-  // C) Folyó mély vize (csak a fahídon lehet átkelni)
-  const inRiver = Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH - 0.4;
-  const onBridge = Math.abs(x - BRIDGE.x) < 1.9 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8;
+  // C) Folyó mély vize (csak a fahídon lehet átkelni, a víz blokkolva van)
+  const inRiver = Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH - 0.2;
+  const onBridge = Math.abs(x - BRIDGE.x) < 2.0 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8;
   if (inRiver && !onBridge) return true;
 
   // D) Világhatár
