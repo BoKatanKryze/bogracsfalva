@@ -639,10 +639,19 @@ function hash(text, seed = 0) {
   return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
 }
 
-// --- 1. Adatok és Session betöltése ---
-const villageResp = await fetch('./village.json');
+// --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
+const APP_VERSION = '20261110-3';
+const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
+
+// Korai deklarációk a Temporal Dead Zone (TDZ) elkerülésére legelső betöltéskor
+const residents = [];
+const byName = new Map();
+const housePickers = [];
+const figurePickers = [];
+let myHomeBeacon = null;
+let playerRpg = null;
 
 // Ha statikus tárhelyen (pl. GitHub Pages) már mentettünk új lakost vagy ház-színezést a localStorage-ba, összefésüljük:
 {
@@ -665,7 +674,7 @@ cachedVillageData = villageData;
 const meResp = await apiFetch('/api/me');
 const meData = meResp.ok ? await meResp.json() : { username: null, privacyMap: {} };
 
-// Ha még nincs összekötve senkivel, megnézzük, választott-e már helyben, különben az 1. lakos (gulyas_mester) az alapértelmezett
+// Ha még nincs összekötve senkivel, megnézzük, választott-e már helyben
 let currentConnectedUser = meData.username || localStorage.getItem('kisfalu_my_user') || null;
 const housePrivacyMap = meData.privacyMap || {};
 
@@ -688,17 +697,12 @@ async function bindUserQuickly(username) {
   const data = await simResp.json();
   currentConnectedUser = data.username;
   localStorage.setItem('kisfalu_my_user', currentConnectedUser);
-  if (typeof switchActiveUserRpg === 'function') {
+  if (playerRpg && typeof switchActiveUserRpg === 'function') {
     switchActiveUserRpg(currentConnectedUser, data.rpg);
   }
   updateClaimButtonUI();
   updateMyHomeBeaconPosition();
   return true;
-}
-
-// Ha legelső indításkor nincs kiválasztott karakter, automatikusan bekötjük az első lakost (pl. gulyas_mester), hogy a "Saját házam" rögtön működjön!
-if (!currentConnectedUser && villageData.residents.length > 0) {
-  await bindUserQuickly(villageData.residents[0].name);
 }
 
 function updateClaimButtonUI() {
@@ -1474,13 +1478,8 @@ function updateWeather(dt) {
 }
 
 // --- 6. Lakosok, Házak és a "Saját házam" 3D Jelzőoszlop ---
-const residents = [];
-const byName = new Map();
-const housePickers = [];
-const figurePickers = [];
-
 // 3D "Saját házam" mutató a saját ház teteje felett (forgó gyűrű + lefelé mutató nyíl)
-const myHomeBeacon = new THREE.Group();
+myHomeBeacon = new THREE.Group();
 {
   const arrow = new THREE.Mesh(
     new THREE.ConeGeometry(0.85, 1.8, 6),
@@ -1502,6 +1501,7 @@ const myHomeBeacon = new THREE.Group();
 }
 
 function updateMyHomeBeaconPosition() {
+  if (!myHomeBeacon) return;
   if (!currentConnectedUser) {
     myHomeBeacon.visible = false;
     return;
@@ -2675,7 +2675,7 @@ function loadUserRpg(username, serverRpg = null) {
   return applyPassiveEnergyRegen(merged);
 }
 
-let playerRpg = loadUserRpg(currentConnectedUser, meData.rpg);
+playerRpg = loadUserRpg(currentConnectedUser, meData.rpg);
 
 function switchActiveUserRpg(username, serverRpg = null) {
   playerRpg = loadUserRpg(username, serverRpg);
@@ -2684,6 +2684,7 @@ function switchActiveUserRpg(username, serverRpg = null) {
 }
 
 function savePlayerRpg(syncToServer = true) {
+  if (!playerRpg) return;
   playerRpg.lastEnergyUpdate = playerRpg.lastEnergyUpdate || Date.now();
   localStorage.setItem(getStorageKeyForUser(currentConnectedUser), JSON.stringify(playerRpg));
   updatePlayerStatsUI();
@@ -2697,14 +2698,14 @@ function savePlayerRpg(syncToServer = true) {
 
 // Cooldown (idő-limit) segédfüggvények az adott felhasználóhoz csatolva
 function getCooldownRemainingSec(actionId) {
-  if (!actionId || !playerRpg.cooldowns) return 0;
+  if (!actionId || !playerRpg?.cooldowns) return 0;
   const unlockAt = playerRpg.cooldowns[actionId] || 0;
   const remMs = unlockAt - Date.now();
   return remMs > 0 ? Math.ceil(remMs / 1000) : 0;
 }
 
 function setActionCooldown(actionId, cooldownSec) {
-  if (!actionId || !cooldownSec) return;
+  if (!actionId || !cooldownSec || !playerRpg) return;
   if (!playerRpg.cooldowns) playerRpg.cooldowns = {};
   playerRpg.cooldowns[actionId] = Date.now() + cooldownSec * 1000;
 }
@@ -2718,12 +2719,13 @@ function formatCooldown(sec) {
 
 const LEVEL_TITLES = ['Beköltöző', 'Falusi Polgár', 'Mesterember', 'Tanácsnok', 'Falubíró', 'Főispán'];
 function getPlayerLevelInfo() {
-  const lvl = Math.floor((playerRpg.xp || 0) / 50) + 1;
+  const lvl = Math.floor(((playerRpg && playerRpg.xp) || 0) / 50) + 1;
   const title = LEVEL_TITLES[Math.min(lvl - 1, LEVEL_TITLES.length - 1)];
   return { lvl, title };
 }
 
 function updatePlayerStatsUI() {
+  if (!playerRpg) return;
   const { lvl, title } = getPlayerLevelInfo();
   el('stat-coins').textContent = `💰 ${playerRpg.coins} Tallér`;
   el('stat-level').textContent = `⭐ ${lvl}. szint (${title})`;
@@ -2734,6 +2736,12 @@ function updatePlayerStatsUI() {
   el('stat-resources').innerHTML = `<span>🪵 Fa: <b>${r.fa}</b></span> · <span>🌾 Liszt: <b>${r.liszt}</b></span> · <span>🐟 Hal: <b>${r.hal}</b></span> · <span>🥛 Tej: <b>${r.tej}</b></span>`;
 }
 updatePlayerStatsUI();
+
+// Ha legelső indításkor még nincs kiválasztott karakter, most (amikor a 3D világ, a lakók és az RPG motor már mind betöltöttek!)
+// automatikusan bekötjük az első lakost (pl. gulyas_mester), hogy a "Saját házam" rögtön működjön:
+if (!currentConnectedUser && villageData.residents.length > 0) {
+  await bindUserQuickly(villageData.residents[0].name);
+}
 
 let currentCardActions = [];
 
