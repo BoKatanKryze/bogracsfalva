@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Bográcsfalva – Közösségi 3D Falu</title>
+  <style>
+    :root {
+      --paper: #fff8ea;
+      --paper-hover: #f2e4c6;
+      --ink: #2c1c0c;
+      --muted: #6b5a45;
+      --gold: #ffcf55;
+      --gold-hover: #ffdc7f;
+      --red: #c8343a;
+      --green: #3f7350;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #8fb24a;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--ink);
+      user-select: none;
+    }
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* Felső sáv */
+    #top {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 3;
+    }
+    #left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      width: 310px;
+      flex: none;
+    }
+    #brand {
+      width: 100%;
+      background: var(--paper);
+      border-radius: 14px;
+      padding: 10px 14px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+      pointer-events: auto;
+    }
+    #brand b {
+      display: block;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+    #brand span {
+      display: block;
+      font-size: 13px;
+      font-style: italic;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    #time-box {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(44,28,12,.12);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    #time-box .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .btn-group {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+    }
+    #time-slider {
+      width: 100%;
+      accent-color: var(--red);
+      cursor: pointer;
+    }
+    .mini-btn {
+      border: 0;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font: 700 11px Georgia, serif;
+      padding: 3px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: #e6d2aa; }
+    .mini-btn.active {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+    .pill-btn {
+      min-height: 38px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 700 13px Georgia, serif;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .pill-btn:hover { background: var(--paper-hover); }
+    .pill-btn.gold { background: var(--gold); }
+    .pill-btn.gold:hover { background: var(--gold-hover); }
+    .pill-btn.green { background: var(--green); color: #fff; }
+    .pill-btn.home-btn {
+      background: #ff5a36;
+      color: #fff;
+    }
+    .pill-btn.home-btn:hover { background: #ff7252; }
+
+    /* Kereső és Kategóriás Lista (Z -> A) */
+    #search {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      max-width: 390px;
+      margin-left: auto;
+      pointer-events: auto;
+    }
+    .search-input-wrap {
+      display: flex;
+      gap: 6px;
+    }
+    #q {
+      flex: 1;
+      height: 46px;
+      border: 0;
+      border-radius: 14px;
+      padding: 0 14px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 500 14.5px Georgia, serif;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    }
+    #q:focus { outline: 3px solid var(--gold); }
+    #search-toggle-btn {
+      height: 46px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 700 13px Georgia, serif;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #search-toggle-btn:hover { background: var(--paper-hover); }
+
+    #search-dropdown {
+      position: absolute;
+      top: 52px;
+      left: 0;
+      right: 0;
+      background: var(--paper);
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 62vh;
+    }
+    #search-tabs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid rgba(44,28,12,.12);
+      padding-bottom: 6px;
+    }
+    .s-tab {
+      flex: 1;
+      min-height: 30px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font: 700 12px Georgia, serif;
+      padding: 4px 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .s-tab.active {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    #search-sort-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+    #hits {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      overflow-y: auto;
+      max-height: 46vh;
+    }
+    #hits li + li {
+      border-top: 1px solid rgba(44,28,12,.07);
+    }
+    #hits button {
+      width: 100%;
+      min-height: 42px;
+      border: 0;
+      background: none;
+      text-align: left;
+      font: 500 13.5px Georgia, serif;
+      color: var(--ink);
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    #hits button .item-main {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    #hits button .item-title { font-weight: 700; }
+    #hits button .item-sub { font-size: 11.5px; color: var(--muted); font-style: italic; }
+    #hits button .item-tag {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font-weight: 700;
+      flex: none;
+    }
+    #hits button .item-tag.action { background: var(--gold); }
+    #hits button .item-tag.mine { background: #ff5a36; color: #fff; }
+    #hits button:hover { background: var(--paper-hover); }
+    #hits .none {
+      padding: 12px;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 13.5px;
+      text-align: center;
+    }
+
+    /* 3D Lebegő címkék + Saját ház képernyőszéli iránytű */
+    #labels {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 1;
+    }
+    .tag {
+      position: absolute;
+      left: 0;
+      top: 0;
+      will-change: transform;
+      padding: 3px 9px;
+      background: var(--paper);
+      border: 0;
+      border-radius: 12px;
+      font: 700 12px Georgia, serif;
+      color: var(--ink);
+      white-space: nowrap;
+      box-shadow: 0 3px 8px rgba(0,0,0,.28);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .tag.person { background: #2c1c0c; color: var(--paper); }
+    .tag.place { background: var(--gold); color: var(--ink); font-size: 12.5px; }
+    .tag.chosen { background: #ff5a36; color: #fff; font-size: 13.5px; z-index: 2; pointer-events: none; }
+    .tag.my-home-tag {
+      background: #ff5a36;
+      color: #fff;
+      font-size: 13px;
+      border: 2px solid #fff8ea;
+      z-index: 2;
+      box-shadow: 0 4px 14px rgba(255,90,54,.6);
+    }
+
+    #home-compass-pointer {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 3;
+      padding: 7px 13px;
+      border-radius: 20px;
+      border: 2px solid #fff8ea;
+      background: #ff5a36;
+      color: #fff;
+      font: 700 13px Georgia, serif;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      cursor: pointer;
+      white-space: nowrap;
+      transform: translate(-50%, -50%);
+    }
+    #home-compass-pointer:hover { background: #ff7252; }
+
+    /* Jobb alsó 3D Kamera és Forgatás Vezérlő */
+    #cam-widget {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      background: rgba(44,28,12,.86);
+      color: var(--paper);
+      border-radius: 14px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 2;
+      font-size: 12px;
+    }
+    #cam-widget .cam-row {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      justify-content: center;
+    }
+    .cam-btn {
+      min-height: 32px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255,248,234,.18);
+      color: var(--paper);
+      font: 700 12.5px Georgia, serif;
+      cursor: pointer;
+    }
+    .cam-btn:hover { background: rgba(255,248,234,.3); }
+    .cam-btn.active { background: var(--gold); color: var(--ink); }
+    #cam-hint {
+      font-size: 11px;
+      color: #e2d4b7;
+      text-align: center;
+    }
+
+    /* Bal alsó szavazás / esemény doboz */
+    #vote {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      max-width: 280px;
+      background: rgba(44,28,12,.86);
+      color: var(--paper);
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 13.5px;
+      line-height: 1.35;
+      z-index: 2;
+    }
+    #event-btn {
+      display: block;
+      width: 100%;
+      margin: 0 0 6px;
+      padding: 0 0 6px;
+      border: 0;
+      border-bottom: 1px solid rgba(255,248,234,.25);
+      background: none;
+      color: var(--gold);
+      text-align: left;
+      font: italic 700 13.5px Georgia, serif;
+      cursor: pointer;
+    }
+    #event-btn:hover { text-decoration: underline; }
+
+    /* Alsó információs kártya (Lakos, Ház, Helyszín vagy Akció) */
+    #card {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      max-width: 445px;
+      max-height: 66vh;
+      overflow-y: auto;
+      margin: 0 auto;
+      background: var(--paper);
+      border-radius: 18px;
+      padding: 16px 44px 16px 18px;
+      box-shadow: 0 12px 34px rgba(0,0,0,.35);
+      z-index: 4;
+    }
+    .close-x {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      background: none;
+      font: 400 24px Georgia, serif;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    #card h2 { margin: 0 0 3px; font-size: 20px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      font-size: 11.5px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .badge.locked { background: #f8d7da; color: #842029; }
+    .badge.open { background: #d1e7dd; color: #0f5132; }
+    #card .role { margin: 0 0 4px; font-weight: 700; color: var(--red); font-size: 14px; }
+    #card .status { margin: 0 0 10px; color: var(--muted); font-style: italic; font-size: 13.5px; }
+    #card .story { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip {
+      padding: 4px 10px;
+      border: 2px solid var(--green);
+      border-radius: 9px;
+      background: none;
+      color: var(--ink);
+      font: 700 13px Georgia, serif;
+      cursor: pointer;
+    }
+    .chip:hover { background: var(--paper-hover); }
+    #diary-box {
+      margin: 8px 0 12px;
+      padding: 8px 10px;
+      background: rgba(44,28,12,.05);
+      border-radius: 10px;
+    }
+    #diary-box h3 { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
+    #diary-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 100px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #diary-list li { display: flex; gap: 8px; }
+    #diary-list time { font-weight: 700; width: 38px; flex: none; color: var(--red); }
+
+    #action-box {
+      margin: 8px 0 10px;
+      padding: 10px 12px;
+      background: rgba(255,207,85,.22);
+      border: 1.5px solid #d99b26;
+      border-radius: 12px;
+    }
+    #action-box h3 { margin: 0 0 6px; font-size: 13px; color: var(--ink); }
+    #action-feedback { margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--green); }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .ghost {
+      min-height: 38px;
+      padding: 0 12px;
+      border: 2px solid var(--green);
+      border-radius: 10px;
+      background: none;
+      color: var(--ink);
+      font: 700 13.5px Georgia, serif;
+      cursor: pointer;
+    }
+    .ghost:hover { background: var(--paper-hover); }
+    .ghost.on { background: var(--green); color: #fff; }
+    .ghost.primary { background: var(--gold); border-color: #d99b26; }
+    .ghost.primary:hover { background: var(--gold-hover); }
+
+    #custom-box {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(44,28,12,.15);
+    }
+    #custom-box h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+    .swatch-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .swatch-row span { width: 55px; font-size: 12.5px; font-weight: 700; }
+    .swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 2px solid rgba(0,0,0,.25);
+      cursor: pointer;
+    }
+    .swatch.active { border: 3px solid var(--ink); transform: scale(1.1); }
+
+    /* Oldalsó panelek */
+    .drawer {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      width: min(380px, calc(100% - 24px));
+      max-height: calc(100% - 24px);
+      background: var(--paper);
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: 0 12px 34px rgba(0,0,0,.35);
+      overflow-y: auto;
+      z-index: 5;
+    }
+    .drawer h2 { margin: 0 36px 8px 0; font-size: 20px; }
+    .drawer h3 { margin: 12px 0 4px; font-size: 14px; color: var(--red); }
+    .drawer p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+    .drawer label { display: block; font-size: 13px; font-weight: 700; margin: 8px 0 4px; }
+    .drawer input, .drawer select {
+      width: 100%;
+      height: 40px;
+      padding: 0 10px;
+      border: 2px solid var(--green);
+      border-radius: 10px;
+      background: #fff;
+      font: 14px Georgia, serif;
+      color: var(--ink);
+    }
+    .drawer .submit-btn {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--gold);
+      color: var(--ink);
+      font: 700 14.5px Georgia, serif;
+      cursor: pointer;
+      padding: 6px 12px;
+    }
+    .drawer .submit-btn:hover { background: var(--gold-hover); }
+    .drawer .submit-btn.secondary { background: var(--paper-hover); }
+    .code-display {
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--paper-hover);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-align: center;
+      user-select: all;
+    }
+    .chronicle-item {
+      padding: 8px 0;
+      border-top: 1px solid rgba(44,28,12,.12);
+    }
+    .chronicle-item b { color: var(--red); display: block; margin-bottom: 3px; font-size: 14px; }
+    .chronicle-item p { margin: 0; color: var(--ink); }
+    .inline-user {
+      border: 0;
+      background: none;
+      padding: 0;
+      color: var(--ink);
+      font: 700 13.5px Georgia, serif;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    #walk-hud {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      max-width: 290px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(44,28,12,.88);
+      color: var(--paper);
+      font-size: 13.5px;
+      line-height: 1.4;
+      z-index: 3;
+    }
+    #walk-hud p { margin: 0 0 8px; }
+    #walk-exit {
+      width: 100%;
+      height: 40px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--gold);
+      color: var(--ink);
+      font: 700 14px Georgia, serif;
+      cursor: pointer;
+    }
+
+    /* Belső szoba (Interior) HUD */
+    #room-hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 14px;
+    }
+    #room-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      pointer-events: auto;
+    }
+    #room-banner {
+      background: var(--paper);
+      padding: 10px 16px;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    #room-banner h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 8px; }
+    #room-banner p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+    #room-editor {
+      pointer-events: auto;
+      width: min(760px, 100%);
+      margin: 0 auto;
+      background: var(--paper);
+      border-radius: 18px;
+      padding: 12px 16px;
+      box-shadow: 0 12px 34px rgba(0,0,0,.4);
+      max-height: 54vh;
+      overflow-y: auto;
+    }
+    #room-editor h3 { margin: 0 0 6px; font-size: 13.5px; color: var(--red); }
+    .inv-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .inv-btn {
+      padding: 6px 11px;
+      border-radius: 10px;
+      border: 2px solid #d5c5a3;
+      background: #fff;
+      font: 700 13px Georgia, serif;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .inv-btn.placed {
+      background: #e3f0e2;
+      border-color: var(--green);
+    }
+    .inv-btn.selected {
+      box-shadow: 0 0 0 2px var(--red);
+    }
+    .inv-btn.gift-box {
+      background: #fff3cd;
+      border-color: #ffcf55;
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse { to { transform: scale(1.04); } }
+
+    .room-controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding-top: 8px;
+      border-top: 1px solid rgba(44,28,12,.12);
+    }
+    .room-subpanel {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(44,28,12,.05);
+      border-radius: 12px;
+      font-size: 13px;
+    }
+    .room-subpanel .row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .room-subpanel input, .room-subpanel select {
+      height: 34px;
+      padding: 0 8px;
+      border: 1.5px solid var(--green);
+      border-radius: 8px;
+      font: 13px Georgia, serif;
+      background: #fff;
+    }
+
+    @media (max-width: 650px) {
+      #left { width: 215px; }
+      #brand b { font-size: 16px; }
+      #cam-widget { bottom: 90px; }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="labels">
+    <div id="chosen-tag" class="tag chosen" hidden></div>
+    <button id="my-home-tag" class="tag my-home-tag" type="button" hidden></button>
+  </div>
+
+  <!-- Képernyőszéli iránytű-mutató, ha a saját házad kívül esik a képernyőn -->
+  <button id="home-compass-pointer" type="button" hidden>🏠 Saját házam erre ➔</button>
+
+  <div id="top">
+    <div id="left">
+      <div id="brand">
+        <b id="village-title">Bográcsfalva</b>
+        <span id="resident-count">Betöltés…</span>
+        <span id="clock-text">12:00</span>
+        <div id="time-box">
+          <div class="row">
+            <span>Napszak: <b id="time-mode-label">Élő idő</b></span>
+            <button id="time-live-btn" class="mini-btn active" type="button">Élő</button>
+          </div>
+          <input id="time-slider" type="range" min="0" max="1439" value="720" aria-label="Napszak csúszka">
+
+          <!-- Táj / Évszak (Falevelek, talaj, havas tetők, téli karácsonyfa + tábortűz a főtéren) -->
+          <div class="row" style="margin-top: 6px;">
+            <span>Táj / Évszak:</span>
+            <div class="btn-group">
+              <button class="mini-btn season-btn" data-s="tavasz" type="button">🌸 Tavasz</button>
+              <button class="mini-btn season-btn active" data-s="nyar" type="button">🌿 Nyár</button>
+              <button class="mini-btn season-btn" data-s="osz" type="button">🍂 Ősz</button>
+              <button class="mini-btn season-btn" data-s="tel" type="button">⛄ Tél (Havas)</button>
+            </div>
+          </div>
+
+          <!-- Időjárás (Külön állítható bármelyik tájhoz, pl. Havas táj + Derült!) -->
+          <div class="row" style="margin-top: 5px;">
+            <span>Időjárás:</span>
+            <div class="btn-group">
+              <button class="mini-btn weather-btn active" data-w="clear" type="button">☀️ Derült</button>
+              <button class="mini-btn weather-btn" data-w="rain" type="button">🌧️ Eső</button>
+              <button class="mini-btn weather-btn" data-w="snow" type="button">❄️ Havazás</button>
+              <button class="mini-btn weather-btn" data-w="fog" type="button">🌫️ Köd</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="my-house-btn" class="pill-btn home-btn" type="button">🏠 Saját házam</button>
+        <button id="claim-open" class="pill-btn gold" type="button">📱 Fiók / DM</button>
+        <button id="add-open" class="pill-btn" type="button">➕ Új követő</button>
+        <button id="chronicle-open" class="pill-btn" type="button">📜 Krónika</button>
+        <button id="walk-open" class="pill-btn" type="button">🚶 Sétálj</button>
+      </div>
+    </div>
+
+    <!-- Kereső + Z-A Kategóriás Lista (Házak, Játékosok, Akciók/Menüpontok) -->
+    <div id="search">
+      <div class="search-input-wrap">
+        <input id="q" type="search" placeholder="Keresés (Házak, Játékosok, Akciók)…" autocomplete="off" spellcheck="false">
+        <button id="search-toggle-btn" type="button">📋 Lista (Z–A)</button>
+      </div>
+      <div id="search-dropdown" hidden>
+        <div id="search-tabs">
+          <button class="s-tab active" data-tab="all" type="button">Mind</button>
+          <button class="s-tab" data-tab="houses" type="button">🏡 Házak</button>
+          <button class="s-tab" data-tab="players" type="button">👤 Játékosok</button>
+          <button class="s-tab" data-tab="actions" type="button">⚡ Akciók / Menü</button>
+        </div>
+        <div id="search-sort-bar">
+          <span id="search-count-label">Rendezés: ABC szerint csökkenő (Z → A)</span>
+          <button id="sort-dir-btn" class="mini-btn" type="button">Sorrend: Z → A ↓</button>
+        </div>
+        <ul id="hits"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="vote">
+    <button id="event-btn" type="button">🏛️ Ma este 20:00-kor falugyűlés a Főtéren</button>
+    <div id="vote-text">Mai szavazás: <b>PÉKSÉG</b> vagy <b>ŐRTORONY</b>?</div>
+  </div>
+
+  <!-- Jobb alsó 3D Kamera és Forgatás vezérlő -->
+  <div id="cam-widget">
+    <div class="cam-row">
+      <button id="cam-rot-left" class="cam-btn" type="button" title="Forgatás balra (Q)">⟲ Balra</button>
+      <button id="cam-tilt-btn" class="cam-btn" type="button" title="Döntési szög váltása">📐 Szög</button>
+      <button id="cam-reset-north" class="cam-btn" type="button" title="Északi irány visszaállítása">🧭 Észak</button>
+      <button id="cam-rot-right" class="cam-btn" type="button" title="Forgatás jobbra (E)">Jobbra ⟳</button>
+    </div>
+    <div class="cam-row">
+      <button id="cam-left-mode" class="cam-btn" type="button" style="width: 100%;">✋ Bal egér: Mozgatás (Jobb egér: 3D Forgatás)</button>
+    </div>
+    <div id="cam-hint">Tipp: Jobb egérgombbal (vagy Q/E billentyűvel) szabadon forgathatod 3D-ben!</div>
+  </div>
+
+  <!-- Lakos / Ház / Helyszín / Akció Kártya -->
+  <section id="card" hidden aria-live="polite">
+    <button id="card-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>
+      <span id="card-name"></span>
+      <span id="card-privacy-badge" class="badge" hidden></span>
+    </h2>
+    <p class="role" id="card-role"></p>
+    <p class="status" id="card-status"></p>
+    <p class="story" id="card-story"></p>
+    <div id="card-people" class="chips"></div>
+
+    <!-- Jövőbeli Akciók doboz (Munka, Pihenés, Étkezés stb.) -->
+    <div id="action-box" hidden>
+      <h3 id="action-box-title">⚡ Elérhető tevékenységek ezen a helyszínen:</h3>
+      <div id="action-buttons" class="actions" style="margin-top: 4px;"></div>
+      <p id="action-feedback" hidden></p>
+    </div>
+
+    <div id="diary-box" hidden>
+      <h3>A mai napja</h3>
+      <ol id="diary-list"></ol>
+    </div>
+
+    <div class="actions">
+      <button id="btn-enter-room" class="ghost primary" hidden>🚪 Belépés a házba</button>
+      <button id="btn-set-mine" class="ghost" hidden>🎯 Ez az én házam</button>
+      <button id="btn-follow" class="ghost" hidden>Kövesd</button>
+      <button id="btn-behind" class="ghost" hidden>Menj vele</button>
+      <button id="btn-house" class="ghost" hidden>A háza</button>
+      <button id="btn-person" class="ghost" hidden>Hol jár most?</button>
+      <button id="btn-custom" class="ghost" hidden>🎨 Külső szín</button>
+    </div>
+
+    <div id="custom-box" hidden>
+      <h3>Ház és ruha külső színe</h3>
+      <div class="swatch-row" id="swatches-roof"><span>Tető:</span></div>
+      <div class="swatch-row" id="swatches-wall"><span>Fal:</span></div>
+      <div class="swatch-row" id="swatches-cloth"><span>Ruha:</span></div>
+    </div>
+  </section>
+
+  <!-- 1. Instagram / TikTok DM Fiók-összekötő Panel -->
+  <aside id="claim-drawer" class="drawer" hidden>
+    <button id="claim-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>Saját házam & DM Kód</h2>
+    <div id="claim-step-1">
+      <p>Válaszd ki a lakosodat (vagy írd be a neved), hogy a <b>🏠 Saját házam</b> mutató mindig a te házadra mutasson, és be tudd rendezni a szobádat!</p>
+      <label for="claim-quick-select">⚡ Gyors lakos-kiválasztás (1 kattintásos localhost teszt):</label>
+      <select id="claim-quick-select"></select>
+      <button id="claim-quick-btn" class="submit-btn" type="button">🏠 Legyen ő a saját karakterem és mutasd a házam!</button>
+
+      <h3>Vagy Instagram / TikTok DM kóddal:</h3>
+      <label for="claim-username">Instagram / TikTok neved</label>
+      <input id="claim-username" type="text" placeholder="pl. gulyas_mester" spellcheck="false">
+      <button id="claim-req-btn" class="submit-btn secondary" type="button">🔑 Kérek DM kódot</button>
+    </div>
+
+    <div id="claim-step-2" hidden>
+      <p>Küldd el ezt a kódot Instagram/TikTok üzenetben a <b id="claim-target-user"></b> fiókodról:</p>
+      <div id="claim-code-box" class="code-display"></div>
+      <p style="font-size: 12.5px;"><i>Localhost teszt: az alábbi gombbal szimulálhatod, hogy a bot megkapta a DM üzenetedet:</i></p>
+      <button id="claim-sim-btn" class="submit-btn" type="button">⚡ DM üzenet megérkezésének szimulálása</button>
+      <button id="claim-back-btn" class="submit-btn secondary" type="button">Vissza</button>
+    </div>
+
+    <div id="claim-step-3" hidden>
+      <p>Ez a böngésző össze van kötve ezzel a lakossal:</p>
+      <div id="claim-connected-user" class="code-display" style="font-size: 20px;"></div>
+      <p>A térképen egy piros <b>🏠 Saját házam</b> jelző mutatja a házadat, és a képernyő szélén is látod, merre van!</p>
+      <button id="claim-fly-home-btn" class="submit-btn" type="button">🧭 Mutasd a házam a térképen!</button>
+      <button id="claim-go-room-btn" class="submit-btn" type="button" style="background: var(--green); color: #fff;">🚪 Belépés a saját szobámba (Berendezés)</button>
+      <button id="claim-logout-btn" class="submit-btn secondary" type="button">Másik lakos választása / Leválasztás</button>
+    </div>
+    <p id="claim-msg" style="color: var(--red); font-weight: 700; margin-top: 8px;" hidden></p>
+  </aside>
+
+  <!-- 2. Új lakos / követő felvétele -->
+  <aside id="add-drawer" class="drawer" hidden>
+    <button id="add-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>Új követő beköltöztetése</h2>
+    <p>Írj be egy Instagram/TikTok-nevet! A szerver automatikusan keres neki egy szabad telket, felépíti a házát, és ad neki kezdő bútorokat.</p>
+    <form id="add-form">
+      <label for="new-name">Felhasználónév</label>
+      <input id="new-name" type="text" placeholder="pl. kovacs_bence" required maxlength="28">
+      <label for="new-place">Munkahely / Szerepkör</label>
+      <select id="new-place">
+        <option value="kocsma">🍺 A kocsmában segít</option>
+        <option value="vadaszhaz">🏹 Vadász az erdőben</option>
+        <option value="piac">🧀 Árus a falusi piacon</option>
+        <option value="steg">🎣 Horgász a folyóparton</option>
+        <option value="malom">🌾 Molnár a szélmalomnál</option>
+        <option value="legelo">🐄 Pásztor a legelőn</option>
+        <option value="tuz">🏛️ Gondnok a Főtéren</option>
+        <option value="szabad">🚶 Nem dolgozik, szabadon sétál</option>
+      </select>
+      <label for="new-title">Egyedi titulus (opcionális)</label>
+      <input id="new-title" type="text" placeholder="pl. Főpohárnok" maxlength="36">
+      <p id="add-error" style="color: var(--red); font-weight: 700;" hidden></p>
+      <button class="submit-btn" type="submit">🏡 Ház felépítése és Legyen az enyém!</button>
+    </form>
+  </aside>
+
+  <!-- 3. Krónika -->
+  <aside id="chronicle-drawer" class="drawer" hidden>
+    <button id="chronicle-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>Falukrónika</h2>
+    <p>A falu eddigi története. A @nevekre kattintva odarepülhetsz a lakoshoz!</p>
+    <div id="chronicle-list"></div>
+  </aside>
+
+  <!-- 4. Sétáló mód HUD -->
+  <div id="walk-hud" hidden>
+    <p><b>W, S / Nyilak:</b> előre, hátra<br><b>A, D:</b> fordulás · <b>Shift:</b> futás<br>Egérrel húzva is körbenézhetsz.</p>
+    <button id="walk-exit" type="button">Vissza a felülnézeti térképre</button>
+  </div>
+
+  <!-- 5. Szobabelső (Interior) Nézet és Berendező HUD -->
+  <div id="room-hud" hidden>
+    <div id="room-top">
+      <div id="room-banner">
+        <h2>
+          <span id="room-title">@lakos szobája</span>
+          <span id="room-badge" class="badge"></span>
+        </h2>
+        <p id="room-subtitle">Forgasd a kamerát egérrel! A tulajdonos átrendezheti a bútorokat.</p>
+      </div>
+      <button id="room-exit-btn" class="pill-btn gold" type="button">⬅️ Kilépés a faluba</button>
+    </div>
+
+    <div id="room-editor" hidden>
+      <h3>🛋️ Raktárad és Szobaberendező (Kattints a lerakáshoz, majd húzd a padlón a 3D szobában!)</h3>
+      <div id="room-inventory" class="inv-bar"></div>
+
+      <div class="room-controls-row">
+        <button id="room-rotate-btn" class="ghost" type="button">🔄 Kijelölt bútor forgatása (90°)</button>
+        <button id="room-remove-btn" class="ghost" type="button">📦 Elrakás a raktárba</button>
+        <button id="room-privacy-btn" class="ghost" type="button">🌍 Ház: Nyitott</button>
+        <button id="room-invite-toggle" class="ghost" type="button">🔑 Meghívó link & Vendéglista</button>
+        <button id="room-gift-toggle" class="ghost" type="button">🎁 Ajándékozás</button>
+        <button id="room-save-btn" class="ghost primary" type="button">💾 Berendezés mentése</button>
+      </div>
+
+      <div id="room-invite-panel" class="room-subpanel" hidden>
+        <b>🔑 Meghívó link zárt házhoz („Kulcs a lábtörlő alatt”):</b>
+        <p style="margin: 3px 0;">Aki erre a linkre rákattint, annak a böngészője elmenti a kulcsot, és bejelentkezés nélkül is bejöhet hozzád:</p>
+        <div class="row">
+          <input id="room-invite-input" type="text" readonly style="flex: 1; min-width: 210px;">
+          <button id="room-copy-invite" class="ghost primary" type="button">Másolás</button>
+          <button id="room-rekey-btn" class="ghost" type="button" title="Érvényteleníti a régi linkeket">🔄 Zárcsere</button>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <b>👥 Vendéglista (@név alapján):</b>
+          <input id="room-guest-input" type="text" placeholder="pl. csapos_bela" style="width: 150px;">
+          <button id="room-guest-add" class="ghost" type="button">Hozzáadás</button>
+          <span id="room-guest-tags" style="display: flex; gap: 4px; flex-wrap: wrap;"></span>
+        </div>
+      </div>
+
+      <div id="room-gift-panel" class="room-subpanel" hidden>
+        <b>🎁 Bútor ajándékozása másik lakosnak:</b>
+        <p style="margin: 3px 0;">A kiválasztott bútor átkerül a címzett szobájába egy becsomagolt ajándékdobozban!</p>
+        <div class="row">
+          <select id="gift-item-select"></select>
+          <input id="gift-target-input" type="text" placeholder="Címzett @neve (pl. csapos_bela)">
+          <button id="gift-send-btn" class="ghost primary" type="button">🎁 Ajándék elküldése</button>
+        </div>
+        <p id="gift-status-msg" style="margin: 4px 0 0; font-weight: 700;" hidden></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

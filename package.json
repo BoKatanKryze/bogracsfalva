@@ -1,0 +1,9 @@
+{
+  "name": "kisfalu",
+  "version": "1.0.0",
+  "description": "3D közösségi falu prototípus (Pörköltpuszta-szerű alap)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

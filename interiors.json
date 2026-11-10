@@ -1,0 +1,2408 @@
+{
+  "sessions": {
+    "26af7e6ecd44cfeaae4d2204e9a19d00a613912026188b3717c8d70f1221f7ca": "gulyas_mester"
+  },
+  "pendingClaims": {},
+  "houses": {
+    "gulyas_mester": {
+      "owner": "gulyas_mester",
+      "privacy": "public",
+      "inviteKey": "ynfjRJ",
+      "guestList": [],
+      "items": [
+        {
+          "id": "gulyas_mester_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "gulyas_mester_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "csapos_bela": {
+      "owner": "csapos_bela",
+      "privacy": "private",
+      "inviteKey": "BPN7o0",
+      "guestList": [],
+      "items": [
+        {
+          "id": "csapos_bela_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "csapos_bela_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "vadasz_dani": {
+      "owner": "vadasz_dani",
+      "privacy": "public",
+      "inviteKey": "rL6tNF",
+      "guestList": [],
+      "items": [
+        {
+          "id": "vadasz_dani_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadasz_dani_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "pecas_peti": {
+      "owner": "pecas_peti",
+      "privacy": "public",
+      "inviteKey": "JWXukU",
+      "guestList": [],
+      "items": [
+        {
+          "id": "pecas_peti_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pecas_peti_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "piacos_marika": {
+      "owner": "piacos_marika",
+      "privacy": "public",
+      "inviteKey": "JyIBiT",
+      "guestList": [],
+      "items": [
+        {
+          "id": "piacos_marika_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "piacos_marika_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "erdo_betyar": {
+      "owner": "erdo_betyar",
+      "privacy": "private",
+      "inviteKey": "hW40-N",
+      "guestList": [],
+      "items": [
+        {
+          "id": "erdo_betyar_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "erdo_betyar_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "szaki_jani": {
+      "owner": "szaki_jani",
+      "privacy": "public",
+      "inviteKey": "KdexV-",
+      "guestList": [],
+      "items": [
+        {
+          "id": "szaki_jani_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szaki_jani_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "sajtos_bandi": {
+      "owner": "sajtos_bandi",
+      "privacy": "public",
+      "inviteKey": "NlVYz0",
+      "guestList": [],
+      "items": [
+        {
+          "id": "sajtos_bandi_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "sajtos_bandi_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "kukta_kata": {
+      "owner": "kukta_kata",
+      "privacy": "public",
+      "inviteKey": "CNYkFb",
+      "guestList": [],
+      "items": [
+        {
+          "id": "kukta_kata_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kukta_kata_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "torzsvendeg_feri": {
+      "owner": "torzsvendeg_feri",
+      "privacy": "public",
+      "inviteKey": "64fIvA",
+      "guestList": [],
+      "items": [
+        {
+          "id": "torzsvendeg_feri_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "torzsvendeg_feri_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "bogyos_zsuzsi": {
+      "owner": "bogyos_zsuzsi",
+      "privacy": "public",
+      "inviteKey": "l99DXl",
+      "guestList": [],
+      "items": [
+        {
+          "id": "bogyos_zsuzsi_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "bogyos_zsuzsi_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "tulparti_tomi": {
+      "owner": "tulparti_tomi",
+      "privacy": "public",
+      "inviteKey": "iSwRSl",
+      "guestList": [],
+      "items": [
+        {
+          "id": "tulparti_tomi_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "tulparti_tomi_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "kandallo_krisz": {
+      "owner": "kandallo_krisz",
+      "privacy": "public",
+      "inviteKey": "7dF_kB",
+      "guestList": [],
+      "items": [
+        {
+          "id": "kandallo_krisz_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kandallo_krisz_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "solyom_bence": {
+      "owner": "solyom_bence",
+      "privacy": "public",
+      "inviteKey": "YzP-MI",
+      "guestList": [],
+      "items": [
+        {
+          "id": "solyom_bence_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "solyom_bence_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "almabor_akos": {
+      "owner": "almabor_akos",
+      "privacy": "public",
+      "inviteKey": "NNKwaJ",
+      "guestList": [],
+      "items": [
+        {
+          "id": "almabor_akos_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "almabor_akos_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "kalandor_lili": {
+      "owner": "kalandor_lili",
+      "privacy": "public",
+      "inviteKey": "wLUz5b",
+      "guestList": [],
+      "items": [
+        {
+          "id": "kalandor_lili_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kalandor_lili_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "pipas_pista": {
+      "owner": "pipas_pista",
+      "privacy": "public",
+      "inviteKey": "a0c-qd",
+      "guestList": [],
+      "items": [
+        {
+          "id": "pipas_pista_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "pipas_pista_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "mehesz_mate": {
+      "owner": "mehesz_mate",
+      "privacy": "public",
+      "inviteKey": "gKgpvx",
+      "guestList": [],
+      "items": [
+        {
+          "id": "mehesz_mate_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "mehesz_mate_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "harcsa_huba": {
+      "owner": "harcsa_huba",
+      "privacy": "public",
+      "inviteKey": "zSaSEO",
+      "guestList": [],
+      "items": [
+        {
+          "id": "harcsa_huba_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "harcsa_huba_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "kobor_kevin": {
+      "owner": "kobor_kevin",
+      "privacy": "public",
+      "inviteKey": "W6g7Vz",
+      "guestList": [],
+      "items": [
+        {
+          "id": "kobor_kevin_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "kobor_kevin_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "vadmalac_viki": {
+      "owner": "vadmalac_viki",
+      "privacy": "public",
+      "inviteKey": "gMBkcr",
+      "guestList": [],
+      "items": [
+        {
+          "id": "vadmalac_viki_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "vadmalac_viki_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "langos_laci": {
+      "owner": "langos_laci",
+      "privacy": "public",
+      "inviteKey": "m9Jgui",
+      "guestList": [],
+      "items": [
+        {
+          "id": "langos_laci_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "langos_laci_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "citeras_csabi": {
+      "owner": "citeras_csabi",
+      "privacy": "public",
+      "inviteKey": "76vluH",
+      "guestList": [],
+      "items": [
+        {
+          "id": "citeras_csabi_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "citeras_csabi_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "szundi_szabi": {
+      "owner": "szundi_szabi",
+      "privacy": "public",
+      "inviteKey": "54tYDD",
+      "guestList": [],
+      "items": [
+        {
+          "id": "szundi_szabi_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "szundi_szabi_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    },
+    "asddsa_asdasdd": {
+      "owner": "asddsa_asdasdd",
+      "privacy": "public",
+      "inviteKey": "AJiHD6",
+      "guestList": [],
+      "items": [
+        {
+          "id": "asddsa_asdasdd_item_1",
+          "type": "agy",
+          "label": "🛏️ Faágy",
+          "placed": true,
+          "x": -2.1,
+          "z": -1.6,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_2",
+          "type": "asztal",
+          "label": "🪑 Ebédlőasztal",
+          "placed": true,
+          "x": 1.2,
+          "z": -0.5,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_3",
+          "type": "szek",
+          "label": "🪑 Faszék",
+          "placed": true,
+          "x": 1.2,
+          "z": 0.7,
+          "rot": 3.141592653589793,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_4",
+          "type": "szonyeg",
+          "label": "🧶 Szőtt szőnyeg",
+          "placed": true,
+          "x": 0,
+          "z": 0.2,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_5",
+          "type": "kandallo",
+          "label": "🔥 Kandalló",
+          "placed": false,
+          "x": 0,
+          "z": -2.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_6",
+          "type": "trofea",
+          "label": "🦌 Szarvasagancs",
+          "placed": false,
+          "x": -2.2,
+          "z": 1.4,
+          "rot": 1.5707963267948966,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_7",
+          "type": "lada",
+          "label": "🧰 Kincsesláda",
+          "placed": false,
+          "x": 2.2,
+          "z": -1.8,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        },
+        {
+          "id": "asddsa_asdasdd_item_8",
+          "type": "bogracs_disz",
+          "label": "🍲 Arany Bogrács",
+          "placed": false,
+          "x": -0.8,
+          "z": 1.4,
+          "rot": 0,
+          "giftFrom": null,
+          "unboxed": true
+        }
+      ]
+    }
+  }
+}

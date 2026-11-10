@@ -1,0 +1,3208 @@
+import * as THREE from 'three';
+import { MapControls } from 'three/addons/controls/MapControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const el = (id) => document.getElementById(id);
+const HOUR = 3600;
+const DEFAULT_POLAR = THREE.MathUtils.degToRad(36); // ~54 fokos rálátás a földtől számítva
+
+// --- 0. Névtelen Böngésző Session Token & Elmentett Meghívókulcsok ("Lábtörlő alatti kulcsok") ---
+function getSessionToken() {
+  let tok = localStorage.getItem('kisfalu_session_token');
+  if (!tok) {
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    tok = Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 28);
+    localStorage.setItem('kisfalu_session_token', tok);
+  }
+  return tok;
+}
+const SESSION_TOKEN = getSessionToken();
+
+function getSavedInviteKeys() {
+  try {
+    return JSON.parse(localStorage.getItem('kisfalu_invite_keys') || '{}');
+  } catch {
+    return {};
+  }
+}
+function saveInviteKeyForHouse(houseName, key) {
+  const keys = getSavedInviteKeys();
+  keys[houseName.toLowerCase()] = key;
+  localStorage.setItem('kisfalu_invite_keys', JSON.stringify(keys));
+}
+
+// --- 0.5 Statikus / GitHub Pages LocalStorage Backend Emulátor ---
+// Ha az oldal GitHub Pages-en (vagy bármilyen statikus tárhelyen, Node.js szerver nélkül) fut,
+// minden /api/... végpontot (DM fiók-összekötés, szobaberendezés, zárt ház meghívók, ajándékozás, új lakos)
+// automatikusan és transzparensen a böngésző localStorage adatbázisából szolgálunk ki!
+const STARTER_CATALOG = [
+  { type: 'agy', label: '🛏️ Faágy', defaultPlaced: true, x: -2.1, z: -1.6, rot: 0 },
+  { type: 'asztal', label: '🪑 Ebédlőasztal', defaultPlaced: true, x: 1.2, z: -0.5, rot: 0 },
+  { type: 'szek', label: '🪑 Faszék', defaultPlaced: true, x: 1.2, z: 0.7, rot: Math.PI },
+  { type: 'szonyeg', label: '🧶 Szőtt szőnyeg', defaultPlaced: true, x: 0, z: 0.2, rot: 0 },
+  { type: 'kandallo', label: '🔥 Kandalló', defaultPlaced: false, x: 0, z: -2.4, rot: 0 },
+  { type: 'trofea', label: '🦌 Szarvasagancs', defaultPlaced: false, x: -2.2, z: 1.4, rot: Math.PI / 2 },
+  { type: 'lada', label: '🧰 Kincsesláda', defaultPlaced: false, x: 2.2, z: -1.8, rot: 0 },
+  { type: 'bogracs_disz', label: '🍲 Arany Bogrács', defaultPlaced: false, x: -0.8, z: 1.4, rot: 0 },
+];
+
+function randomInviteKey(len = 6) {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+function createStarterHouseLocal(username, index = 0) {
+  const isPrivateDefault = index === 1 || index === 5;
+  return {
+    owner: username,
+    privacy: isPrivateDefault ? 'private' : 'public',
+    inviteKey: randomInviteKey(6),
+    guestList: [],
+    items: STARTER_CATALOG.map((item, idx) => ({
+      id: `${username}_item_${idx + 1}`,
+      type: item.type,
+      label: item.label,
+      placed: item.defaultPlaced,
+      x: item.x,
+      z: item.z,
+      rot: item.rot,
+      giftFrom: null,
+      unboxed: true,
+    })),
+  };
+}
+
+function findNextPlotLocal(houses) {
+  const occupied = houses.map((h) => [h.x, h.z]);
+  const rZ = (x) => Math.sin(x * 0.025) * 6 - 14;
+  for (let i = houses.length; i < 2500; i++) {
+    const angle = i * 0.68;
+    const radius = 22 + Math.sqrt(i) * 11.5;
+    const x = Math.round(Math.cos(angle) * radius * 10) / 10;
+    const z = Math.round(Math.sin(angle) * radius * 10) / 10;
+    if (Math.abs(z - rZ(x)) < 11) continue;
+    if (Math.hypot(x, z) < 20) continue;
+    if (Math.hypot(x - 32, z + 28) < 14) continue;
+    if (Math.hypot(x + 38, z + 34) < 14) continue;
+    if (Math.hypot(x - 42, z - 24) < 15) continue;
+    if (Math.hypot(x + 32, z - 28) < 12) continue;
+    const tooClose = occupied.some(([ox, oz]) => Math.hypot(x - ox, z - oz) < 10.5);
+    if (!tooClose) {
+      const rot = Math.round((Math.atan2(-x, -z) + (i % 3 - 1) * 0.15) * 100) / 100;
+      return { x, z, rot };
+    }
+  }
+  return { x: 40 + houses.length * 8, z: 40, rot: 0 };
+}
+
+let cachedVillageData = null;
+
+function loadLocalDb() {
+  try {
+    const raw = localStorage.getItem('kisfalu_static_db_v1');
+    if (raw) return JSON.parse(raw);
+  } catch { /* fallback */ }
+  const db = {
+    sessions: {},
+    pendingClaims: {},
+    houses: {},
+    extraResidents: [],
+    customizations: {},
+  };
+  if (cachedVillageData?.residents) {
+    cachedVillageData.residents.forEach((r, idx) => {
+      db.houses[r.name.toLowerCase()] = createStarterHouseLocal(r.name, idx);
+    });
+  }
+  localStorage.setItem('kisfalu_static_db_v1', JSON.stringify(db));
+  return db;
+}
+
+function saveLocalDb(db) {
+  localStorage.setItem('kisfalu_static_db_v1', JSON.stringify(db));
+}
+
+function jsonResp(status, payload) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
+function handleLocalApi(urlStr, options = {}) {
+  const u = new URL(urlStr, window.location.origin);
+  const method = (options.method || 'GET').toUpperCase();
+  const body = options.body ? JSON.parse(options.body) : {};
+  const db = loadLocalDb();
+  const currentUser = db.sessions[SESSION_TOKEN] || localStorage.getItem('kisfalu_my_user') || null;
+
+  if (u.pathname.endsWith('/api/me') && method === 'GET') {
+    const privacyMap = {};
+    for (const [k, h] of Object.entries(db.houses)) privacyMap[k] = h.privacy;
+    return jsonResp(200, { username: currentUser, privacyMap });
+  }
+
+  if (u.pathname.endsWith('/api/claim/request') && method === 'POST') {
+    const name = String(body.username || '').trim().replace(/^@/, '');
+    const allRes = cachedVillageData?.residents || [];
+    const resident = allRes.find((r) => r.name.toLowerCase() === name.toLowerCase());
+    if (!resident) {
+      return jsonResp(404, { error: 'Ezzel a névvel még nincs ház a faluban! Először költöztesd be.' });
+    }
+    const code = `BF-${Math.floor(1000 + Math.random() * 9000)}`;
+    db.pendingClaims[code] = { username: resident.name, expiresAt: Date.now() + 600000 };
+    saveLocalDb(db);
+    return jsonResp(200, { code, username: resident.name, expiresInSec: 600 });
+  }
+
+  if (u.pathname.endsWith('/api/claim/simulate-dm') && method === 'POST') {
+    const code = String(body.code || '').trim().toUpperCase();
+    const pending = db.pendingClaims[code];
+    if (!pending) return jsonResp(400, { error: 'Érvénytelen vagy lejárt kód.' });
+    db.sessions[SESSION_TOKEN] = pending.username;
+    delete db.pendingClaims[code];
+    const key = pending.username.toLowerCase();
+    if (!db.houses[key]) db.houses[key] = createStarterHouseLocal(pending.username);
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true, username: pending.username });
+  }
+
+  if (u.pathname.endsWith('/api/claim/logout') && method === 'POST') {
+    delete db.sessions[SESSION_TOKEN];
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true });
+  }
+
+  if (u.pathname.endsWith('/api/house') && method === 'GET') {
+    const targetName = String(u.searchParams.get('name') || '').trim().toLowerCase();
+    const providedKey = String(u.searchParams.get('key') || '').trim();
+    let house = db.houses[targetName];
+    if (!house) {
+      const resObj = (cachedVillageData?.residents || []).find((r) => r.name.toLowerCase() === targetName);
+      if (!resObj) return jsonResp(404, { error: 'A ház nem található.' });
+      house = createStarterHouseLocal(resObj.name);
+      db.houses[targetName] = house;
+      saveLocalDb(db);
+    }
+    const isOwner = Boolean(currentUser && currentUser.toLowerCase() === targetName);
+    const hasValidKey = Boolean(providedKey && providedKey === house.inviteKey);
+    const onGuestList = Boolean(currentUser && house.guestList.some((g) => g.toLowerCase() === currentUser.toLowerCase()));
+    const isPublic = house.privacy === 'public';
+
+    if (!isOwner && !isPublic && !hasValidKey && !onGuestList) {
+      return jsonResp(403, {
+        allowed: false,
+        privacy: house.privacy,
+        owner: house.owner,
+        message: 'Ez a ház zárt. Csak a tulajdonos meghívó linkjével vagy a vendéglistán szerepelve léphetsz be!',
+      });
+    }
+    return jsonResp(200, {
+      allowed: true,
+      owner: house.owner,
+      isOwner,
+      privacy: house.privacy,
+      inviteKey: isOwner ? house.inviteKey : undefined,
+      guestList: isOwner ? house.guestList : undefined,
+      items: house.items,
+    });
+  }
+
+  if (u.pathname.endsWith('/api/house/save') && method === 'POST') {
+    if (!currentUser) return jsonResp(403, { error: 'Nincs összekötött fiók.' });
+    const key = currentUser.toLowerCase();
+    const house = db.houses[key];
+    if (!house) return jsonResp(404, { error: 'Ház nem található.' });
+    if (body.privacy === 'public' || body.privacy === 'private') house.privacy = body.privacy;
+    if (Array.isArray(body.guestList)) {
+      house.guestList = body.guestList.map((g) => String(g).trim().replace(/^@/, '')).filter(Boolean).slice(0, 20);
+    }
+    if (Array.isArray(body.items)) {
+      const updatedMap = new Map(body.items.map((i) => [i.id, i]));
+      let placedCount = 0;
+      for (const item of house.items) {
+        const incoming = updatedMap.get(item.id);
+        if (!incoming) continue;
+        item.placed = Boolean(incoming.placed) && placedCount < 12;
+        if (item.placed) placedCount++;
+        item.x = Math.max(-2.6, Math.min(2.6, Number(incoming.x) || 0));
+        item.z = Math.max(-2.6, Math.min(2.6, Number(incoming.z) || 0));
+        item.rot = Number(incoming.rot) || 0;
+        item.unboxed = incoming.unboxed !== false;
+      }
+    }
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true, house });
+  }
+
+  if (u.pathname.endsWith('/api/house/rekey') && method === 'POST') {
+    if (!currentUser) return jsonResp(403, { error: 'Nem vagy bejelentkezve.' });
+    const house = db.houses[currentUser.toLowerCase()];
+    if (!house) return jsonResp(404, { error: 'Ház nem található.' });
+    house.inviteKey = randomInviteKey(6);
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true, inviteKey: house.inviteKey });
+  }
+
+  if (u.pathname.endsWith('/api/house/gift') && method === 'POST') {
+    if (!currentUser) return jsonResp(403, { error: 'Ajándékozáshoz kösd össze a fiókod!' });
+    const targetName = String(body.toUsername || '').trim().replace(/^@/, '').toLowerCase();
+    const itemId = String(body.itemId || '');
+    if (!targetName || targetName === currentUser.toLowerCase()) {
+      return jsonResp(400, { error: 'Adj meg egy másik lakost címzettként!' });
+    }
+    const myHouse = db.houses[currentUser.toLowerCase()];
+    const targetHouse = db.houses[targetName];
+    if (!targetHouse) return jsonResp(404, { error: 'A címzett lakosnak még nincs háza a faluban!' });
+    const idx = myHouse.items.findIndex((i) => i.id === itemId);
+    if (idx === -1) return jsonResp(404, { error: 'A kiválasztott tárgy nem található a raktáradban.' });
+    const [giftedItem] = myHouse.items.splice(idx, 1);
+    giftedItem.id = `${targetName}_gift_${Date.now()}`;
+    giftedItem.placed = true;
+    giftedItem.x = (Math.random() - 0.5) * 1.6;
+    giftedItem.z = (Math.random() - 0.5) * 1.6;
+    giftedItem.rot = 0;
+    giftedItem.giftFrom = currentUser;
+    giftedItem.unboxed = false;
+    targetHouse.items.push(giftedItem);
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true, items: myHouse.items, giftedTo: targetHouse.owner });
+  }
+
+  if (u.pathname.endsWith('/api/resident') && method === 'POST') {
+    const rawName = String(body.name || '').trim().replace(/^@/, '');
+    if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,30}$/.test(rawName)) {
+      return jsonResp(400, { error: 'Adj meg egy érvényes felhasználónevet (2-30 karakter)!' });
+    }
+    const allRes = cachedVillageData?.residents || [];
+    const exists = allRes.find((r) => r.name.toLowerCase() === rawName.toLowerCase());
+    if (exists) {
+      return jsonResp(409, { error: 'Ezzel a névvel már lakik valaki a faluban!', resident: exists });
+    }
+    const plot = findNextPlotLocal(allRes);
+    const ROLES = [
+      { title: 'A kocsmában segít', place: 'kocsma', cloth: '#c84b31' },
+      { title: 'Vadász', place: 'vadaszhaz', cloth: '#3f7350' },
+      { title: 'Kofa a piacon', place: 'piac', cloth: '#d49b27' },
+      { title: 'Horgász a stégen', place: 'steg', cloth: '#3a7ca5' },
+      { title: 'Tűzmester segédje', place: 'tuz', cloth: '#b5552e' },
+      { title: 'Molnár a szélmalomnál', place: 'malom', cloth: '#8d6e63' },
+      { title: 'Pásztor a legelőn', place: 'legelo', cloth: '#558b2f' },
+      { title: 'Nem dolgozik, sétálgat', place: 'szabad', cloth: '#6c5ce7' },
+    ];
+    const chosenRole = ROLES.find((r) => r.place === body.place) || ROLES[allRes.length % ROLES.length];
+    const ROOFS = ['#c8523b', '#d99b26', '#4a7c59', '#5b6e8c', '#8c4a6b'];
+    const newResident = {
+      id: allRes.length + 1,
+      name: rawName,
+      title: body.title?.trim() || chosenRole.title,
+      place: chosenRole.place,
+      x: plot.x,
+      z: plot.z,
+      rot: plot.rot,
+      roof: ROOFS[allRes.length % ROOFS.length],
+      wall: '#f5eedc',
+      cloth: chosenRole.cloth,
+      day: cachedVillageData?.day || 1,
+    };
+    db.extraResidents.push(newResident);
+    if (cachedVillageData?.residents) cachedVillageData.residents.push(newResident);
+    db.houses[rawName.toLowerCase()] = createStarterHouseLocal(rawName);
+    saveLocalDb(db);
+    return jsonResp(201, { ok: true, resident: newResident });
+  }
+
+  if (u.pathname.endsWith('/api/customize') && method === 'POST') {
+    const key = String(body.name || '').toLowerCase();
+    db.customizations[key] = {
+      ...(db.customizations[key] || {}),
+      ...(body.roof ? { roof: body.roof } : {}),
+      ...(body.wall ? { wall: body.wall } : {}),
+      ...(body.cloth ? { cloth: body.cloth } : {}),
+    };
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true });
+  }
+
+  return jsonResp(404, { error: 'Ismeretlen végpont.' });
+}
+
+const isStaticHost = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
+let useLocalBackend = isStaticHost;
+
+async function apiFetch(url, options = {}) {
+  if (!useLocalBackend) {
+    try {
+      const headers = {
+        'x-session-token': SESSION_TOKEN,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+      };
+      const resp = await fetch(url, { ...options, headers });
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        return resp;
+      }
+      // Ha a tárhely nem JSON-t adott vissza (pl. GitHub Pages 404 HTML), átváltunk helyi módra
+      useLocalBackend = true;
+    } catch {
+      useLocalBackend = true;
+    }
+  }
+  return handleLocalApi(url, options);
+}
+
+// Folyó íve és a fahíd helye
+const riverZ = (x) => Math.sin(x * 0.025) * 6 - 14;
+const RIVER_HALF_WIDTH = 4.5;
+const BRIDGE = { x: 0, southZ: -8.5, northZ: -19.5 };
+
+// Nevezetes helyszínek és hozzájuk tartozó Játékos Akciók (Munka, Pihenés, Étkezés stb.)
+const PLACES = {
+  tuz: {
+    name: 'A Főtér',
+    since: 'A falu központja az 1. nap óta',
+    x: 0, z: 3.5, r: 4.2,
+    at: 'a főtéren', to: 'a főtérre',
+    story: 'A falu macskaköves főtere, ahol minden este 20:00-kor összegyűlik a falu apraja-nagyja. Tavasztól őszig díszkút áll a közepén, télen (havas tájon) pedig itt lobog a tábortűz és itt ragyog a falu karácsonyfája!',
+    actions: [
+      { label: '🏛️ Korzózás és Beszélgetés a Főtéren (+Morál)', msg: 'Körbesétáltál a Főtéren és beszélgettél a falubeliekkel!' },
+      { label: '🍲 Bográcsozás / Forró ital (+50% Energia)', msg: 'Ettél egy tál forró ételt a Főtéren, az energiád feltöltődött! (+50% Energia)' },
+      { label: '🎄 Váltás Téli Főtérre (Tábortűz + Karácsonyfa)', onClick: () => applySeason('tel') },
+    ],
+  },
+  tuzkor: {
+    name: 'Az esti Főtér',
+    since: 'Minden este 20:00-kor',
+    x: 0, z: 3.5, r: 7.5,
+    at: 'az esti főtéren', to: 'az esti főtérre',
+    story: 'Esténként a lakók összegyűlnek a Főtéren.',
+    actions: [],
+  },
+  kocsma: {
+    name: 'A Falusi Kocsma',
+    since: 'A 3. napon épült',
+    x: 15, z: 9, r: 4.0,
+    at: 'a kocsmánál', to: 'a kocsmához',
+    story: 'A falu 84-12-re a kocsmát szavazta meg a könyvtár helyett. A hordók mindig tele vannak.',
+    actions: [
+      { label: '🍺 Pihenés és Beszélgetés (+Morál)', msg: 'Koccintottál a lakókkal, és meghallgattad a legújabb falusi pletykákat!' },
+      { label: '🔨 Munka: Csapos műszak (+20 Tallér)', msg: 'Beálltál a pult mögé segíteni @csapos_bela mellé! (+20 Tallér)' },
+    ],
+  },
+  vadaszhaz: {
+    name: 'A Vadászház',
+    since: 'A 4. napon épült',
+    x: -36, z: -32, r: 4.5,
+    at: 'a vadászháznál', to: 'a vadászházhoz',
+    story: 'Az északi folyóparton, a sűrű erdő szélén áll. Innen indulnak a vadászok és a favágók.',
+    actions: [
+      { label: '🪓 Munka: Favágás az erdőben (+25 Fa)', msg: 'Kivágtál és felaprítottál egy rakás tűzifát a falunak! (+25 Fa)' },
+      { label: '🏹 Munka: Vadászat (+30 Tallér)', msg: 'Sikeresen visszatértél az erdei portyáról! (+30 Tallér)' },
+    ],
+  },
+  piac: {
+    name: 'A Falusi Piac',
+    since: 'Az 5. napon nyílt',
+    x: 30, z: -26, r: 4.5,
+    at: 'a piacon', to: 'a piacra',
+    story: 'Friss sajt, lángos, méz és gyógynövények kaphatók a színes ponyvás standoknál.',
+    actions: [
+      { label: '🧀 Munka: Árusítás a standnál (+25 Tallér)', msg: 'Eladtad a friss portékát a piacon! (+25 Tallér)' },
+      { label: '🥨 Lángos vásárlása (+Energia)', msg: 'Friss fokhagymás-tejfölös lángost ettél @langos_laci standjánál!' },
+    ],
+  },
+  steg: {
+    name: 'A Horgászstég',
+    since: 'A 4. napon ácsolták',
+    x: 19, z: -9.2, r: 2.2,
+    at: 'a stégen', to: 'a stégre',
+    story: 'A folyó legmélyebb kanyarja fölé nyúlik be. A horgászok szerint kapitális harcsák laknak odalent.',
+    actions: [
+      { label: '🎣 Horgászat indítása', msg: 'Bedobtad a csalit a folyóba… és kifogtál egy szép pontyot!' },
+      { label: '🌊 Pihenés a vízparton', msg: 'Leültél a stég szélére, és hallgatod a folyó csobogását.' },
+    ],
+  },
+  hid: {
+    name: 'A Fahíd',
+    since: 'A 2. napon épült',
+    x: 0, z: -14, r: 2.5,
+    at: 'a hídnál', to: 'a hídhoz',
+    story: 'Az egyetlen száraz átkelő a folyó déli és északi partja között.',
+    actions: [
+      { label: '🛡️ Hídőrség (+15 Tallér)', msg: 'Ellenőrizted a hídon átkelő szekereket és vándorokat!' },
+    ],
+  },
+  malom: {
+    name: 'A Szélmalom',
+    since: 'A dombtető büszkesége',
+    x: -32, z: 28, r: 4.0,
+    at: 'a szélmalomnál', to: 'a szélmalomhoz',
+    story: 'A vitorlák éjjel-nappal forognak, itt őrlik a falu lisztjét a lángoshoz és a kenyérhez.',
+    actions: [
+      { label: '🌾 Munka: Búzaőrlés (+20 Liszt)', msg: 'Felöntötted a garatra a búzát, friss liszt készült a falunak!' },
+    ],
+  },
+  legelo: {
+    name: 'A Legelő',
+    since: 'A tehenek és bárányok otthona',
+    x: 42, z: 24, r: 5.0,
+    at: 'a legelőn', to: 'a legelőre',
+    story: 'Bekerített zöld legelő itatóval, ahol a falu tehenei és bárányai békésen legelésznek.',
+    actions: [
+      { label: '🐄 Munka: Állatok etetése és fejés (+20 Tej)', msg: 'Megtöltötted a vályút friss vízzel, és megfejted a teheneket!' },
+    ],
+  },
+  gemeskut: {
+    name: 'A Gémeskút',
+    since: 'Friss kútvíz',
+    x: -13, z: -2, r: 2.5,
+    at: 'a gémeskútnál', to: 'a gémeskúthoz',
+    story: 'Hűvös vizet ad a bográcsba és a megfáradt vándoroknak.',
+    actions: [
+      { label: '🪣 Vízhúzás a kútból (+Frissülés)', msg: 'Húztál egy vödör jéghideg kútvizet!' },
+    ],
+  },
+};
+const WORK_PLACES = ['tuz', 'kocsma', 'vadaszhaz', 'piac', 'steg', 'malom', 'legelo', 'gemeskut'];
+
+// Keresőben megjelenő Menüpontok és Akciók listája (Munka, Pihenés, Szoba stb.)
+const ACTION_MENU_ITEMS = [
+  { id: 'act_walk', title: 'Vándorlás és Séta (WASD mód)', sub: 'Szabad séta saját karakterrel a faluban', type: 'walk' },
+  { id: 'act_fire', title: 'Főtér: Falugyűlés, Korzózás és Téli Karácsonyfa', sub: 'A falu központi főtere (télen tábortűzzel és karácsonyfával)', type: 'place', placeKey: 'tuz' },
+  { id: 'act_room', title: 'Szobaberendezés és Ajándékozás', sub: 'Bútorok lerakása, zárt ház meghívólink, ajándék', type: 'my_room' },
+  { id: 'act_rest', title: 'Pihenés és Alvás (Saját ház)', sub: 'Hazatérés a saját házadhoz és pihenés', type: 'my_home' },
+  { id: 'act_hunt', title: 'Munka: Vadászat és Favágás', sub: 'Vadászház az északi erdőszélen', type: 'place', placeKey: 'vadaszhaz' },
+  { id: 'act_mill', title: 'Munka: Lisztőrlés a Szélmalomban', sub: 'Dombvidéki szélmalom', type: 'place', placeKey: 'malom' },
+  { id: 'act_market', title: 'Munka: Kereskedés a Piacon', sub: 'Árusítás és vásárlás a falusi piacon', type: 'place', placeKey: 'piac' },
+  { id: 'act_pasture', title: 'Munka: Állatgondozás a Legelőn', sub: 'Tehenek és bárányok ellátása', type: 'place', placeKey: 'legelo' },
+  { id: 'act_pub', title: 'Kikapcsolódás és Munka a Kocsmában', sub: 'Italok, pletykák és csapos műszak', type: 'place', placeKey: 'kocsma' },
+  { id: 'act_fish', title: 'Horgászat és Pihenés a Stégen', sub: 'Pecázás a folyóparton', type: 'place', placeKey: 'steg' },
+];
+
+function hash(text, seed = 0) {
+  let h = 2166136261 ^ seed;
+  for (let i = 0; i < text.length; i++) {
+    h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  }
+  h = Math.imul(h ^ (h >>> 15), 2246822519);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+// --- 1. Adatok és Session betöltése ---
+const villageResp = await fetch('./village.json');
+const villageData = await villageResp.json();
+cachedVillageData = villageData;
+
+// Ha statikus tárhelyen (pl. GitHub Pages) már mentettünk új lakost vagy ház-színezést a localStorage-ba, összefésüljük:
+{
+  const localDb = loadLocalDb();
+  if (Array.isArray(localDb.extraResidents)) {
+    for (const extra of localDb.extraResidents) {
+      if (!villageData.residents.some((r) => r.name.toLowerCase() === extra.name.toLowerCase())) {
+        villageData.residents.push(extra);
+      }
+    }
+  }
+  if (localDb.customizations) {
+    for (const r of villageData.residents) {
+      const cust = localDb.customizations[r.name.toLowerCase()];
+      if (cust) Object.assign(r, cust);
+    }
+  }
+}
+
+const meResp = await apiFetch('/api/me');
+const meData = meResp.ok ? await meResp.json() : { username: null, privacyMap: {} };
+
+// Ha még nincs összekötve senkivel, megnézzük, választott-e már helyben, különben az 1. lakos (gulyas_mester) az alapértelmezett
+let currentConnectedUser = meData.username || localStorage.getItem('kisfalu_my_user') || null;
+const housePrivacyMap = meData.privacyMap || {};
+
+el('village-title').textContent = villageData.villageName || 'Bográcsfalva';
+el('vote-text').innerHTML = villageData.voteQuestion || 'Mai szavazás: <b>PÉKSÉG</b> vagy <b>ŐRTORONY</b>?';
+
+// Gyors lakos-összekötő segédfüggvény (automatikus DM kód + szimuláció)
+async function bindUserQuickly(username) {
+  const reqResp = await apiFetch('/api/claim/request', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  });
+  if (!reqResp.ok) return false;
+  const { code } = await reqResp.json();
+  const simResp = await apiFetch('/api/claim/simulate-dm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+  if (!simResp.ok) return false;
+  const data = await simResp.json();
+  currentConnectedUser = data.username;
+  localStorage.setItem('kisfalu_my_user', currentConnectedUser);
+  updateClaimButtonUI();
+  updateMyHomeBeaconPosition();
+  return true;
+}
+
+// Ha legelső indításkor nincs kiválasztott karakter, automatikusan bekötjük az első lakost (pl. gulyas_mester), hogy a "Saját házam" rögtön működjön!
+if (!currentConnectedUser && villageData.residents.length > 0) {
+  await bindUserQuickly(villageData.residents[0].name);
+}
+
+function updateClaimButtonUI() {
+  const btn = el('claim-open');
+  const homeBtn = el('my-house-btn');
+  if (currentConnectedUser) {
+    btn.textContent = `👤 @${currentConnectedUser}`;
+    btn.classList.remove('gold');
+    btn.classList.add('green');
+    homeBtn.textContent = `🏠 Saját házam (@${currentConnectedUser})`;
+  } else {
+    btn.textContent = '📱 Fiók / DM';
+    btn.classList.add('gold');
+    btn.classList.remove('green');
+    homeBtn.textContent = '🏠 Saját házam';
+  }
+}
+
+// --- 2. Three.js Renderer és Fő Jelenet ---
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fb24a);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 1, 900);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x9ab05a, 1.1);
+scene.add(hemiLight);
+
+const sun = new THREE.DirectionalLight(0xfff0cf, 3.0);
+sun.position.set(-90, 120, -80);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -125, right: 125, top: 125, bottom: -125, near: 10, far: 350 });
+sun.shadow.bias = -0.0008;
+scene.add(sun);
+
+const fireLight = new THREE.PointLight(0xff8c3b, 8, 32, 1.6);
+fireLight.position.set(0, 2.2, 3.5);
+scene.add(fireLight);
+
+const matCache = new Map();
+function mat(hex) {
+  const key = typeof hex === 'string' ? hex.toLowerCase() : hex;
+  if (!matCache.has(key)) {
+    matCache.set(key, new THREE.MeshLambertMaterial({ color: hex, flatShading: true }));
+  }
+  return matCache.get(key);
+}
+function box(w, h, d, color, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 8) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+function cone(r, h, color, x = 0, y = 0, z = 0, seg = 7) {
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+// --- 3. Optimalizált Környezet (InstancedMesh) & Évszak Referenciák ---
+const streetLampBulbs = [];
+const envRefs = {
+  groundMat: null,
+  bankMat: null,
+  waterMat: null,
+  roadMat: null,
+  crownInst: null,
+  pineInst: null,
+  flowerInst: null,
+  deciduousCoords: [],
+  pineCoords: [],
+  flowerValid: [],
+  snowRoofs: [],
+};
+
+function buildOptimizedEnvironment() {
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x8fb24a });
+  envRefs.groundMat = groundMat;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(440, 440), groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const bankMat = new THREE.MeshLambertMaterial({ color: 0xd5c295, flatShading: true });
+  const waterMat = new THREE.MeshLambertMaterial({ color: 0x4ea5d9, flatShading: true });
+  envRefs.bankMat = bankMat;
+  envRefs.waterMat = waterMat;
+
+  const riverSegs = 110;
+  for (let i = 0; i < riverSegs; i++) {
+    const x1 = -220 + (i / riverSegs) * 440;
+    const x2 = -220 + ((i + 1) / riverSegs) * 440;
+    const xm = (x1 + x2) / 2;
+    const zm = riverZ(xm);
+    const angle = Math.atan2(riverZ(x2) - riverZ(x1), x2 - x1);
+    const bank = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.06, RIVER_HALF_WIDTH * 2 + 1.8),
+      bankMat
+    );
+    bank.position.set(xm, 0.01, zm);
+    bank.rotation.y = -angle;
+    bank.receiveShadow = true;
+    scene.add(bank);
+
+    const water = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.12, RIVER_HALF_WIDTH * 2),
+      waterMat
+    );
+    water.position.set(xm, 0.03, zm);
+    water.rotation.y = -angle;
+    water.receiveShadow = true;
+    scene.add(water);
+  }
+
+  const roadMat = new THREE.MeshLambertMaterial({ color: 0xc8b082, flatShading: true });
+  envRefs.roadMat = roadMat;
+  const addRoad = (x1, z1, x2, z2, width = 2.6) => {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const road = new THREE.Mesh(new THREE.BoxGeometry(width, 0.06, len), roadMat);
+    road.position.set((x1 + x2) / 2, 0.03, (z1 + z2) / 2);
+    road.rotation.y = Math.atan2(x2 - x1, z2 - z1);
+    road.receiveShadow = true;
+    scene.add(road);
+  };
+  addRoad(0, 3.5, 0, -8.5, 3.0);
+  addRoad(0, -19.5, -36, -32, 2.5);
+  addRoad(0, -19.5, 30, -26, 2.5);
+  addRoad(0, 3.5, 15, 9, 2.6);
+  addRoad(15, 9, 19, -8, 2.2);
+  addRoad(0, 3.5, -32, 28, 2.3);
+  addRoad(15, 9, 36, 22, 2.3);
+
+  const lampPositions = [
+    [-2.5, -2], [2.5, -7], [-2.5, -21], [8, 6], [12, 11],
+    [-10, 11], [-22, 20], [14, -22], [-15, -25], [26, 16]
+  ];
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0x555045 });
+  streetLampBulbs.push(bulbMat);
+
+  for (const [lx, lz] of lampPositions) {
+    const lamp = new THREE.Group();
+    lamp.add(cyl(0.08, 0.11, 3.2, 0x3b2a1a, 0, 1.6, 0, 6));
+    lamp.add(box(0.6, 0.08, 0.08, 0x3b2a1a, 0.25, 3.15, 0));
+    const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.42, 0.32), bulbMat);
+    lantern.position.set(0.5, 2.9, 0);
+    lamp.add(lantern);
+    lamp.position.set(lx, 0, lz);
+    scene.add(lamp);
+  }
+
+  const dummy = new THREE.Object3D();
+  const colorHelper = new THREE.Color();
+
+  const isSpotFree = (x, z) => {
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH + 2.5) return false;
+    for (const p of Object.values(PLACES)) {
+      if (Math.hypot(x - p.x, z - p.z) < p.r + 5.5) return false;
+    }
+    return true;
+  };
+
+  const treeCoords = [];
+  for (let i = 0; i < 220; i++) {
+    const a = hash(`t_${i}`, 1) * Math.PI * 2;
+    const d = i < 55 ? 10 + hash(`t_${i}`, 2) * 28 : 54 + hash(`t_${i}`, 2) * 95;
+    const x = (i < 55 ? -38 : 0) + Math.cos(a) * d;
+    const z = (i < 55 ? -34 : 0) + Math.sin(a) * d;
+    if (!isSpotFree(x, z)) continue;
+    treeCoords.push({ x, z, scale: 0.75 + hash(`t_${i}`, 3) * 0.75, pine: i % 3 === 0, shade: hash(`t_${i}`, 4) });
+  }
+
+  const trunkInst = new THREE.InstancedMesh(
+    new THREE.CylinderGeometry(0.18, 0.26, 1.6, 6),
+    mat(0x5a3a22),
+    treeCoords.length
+  );
+  trunkInst.castShadow = true;
+  const deciduousCoords = treeCoords.filter((t) => !t.pine);
+  const pineCoords = treeCoords.filter((t) => t.pine);
+  envRefs.deciduousCoords = deciduousCoords;
+  envRefs.pineCoords = pineCoords;
+
+  const crownInst = new THREE.InstancedMesh(
+    new THREE.DodecahedronGeometry(1.35, 0),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
+    deciduousCoords.length
+  );
+  crownInst.castShadow = true;
+  envRefs.crownInst = crownInst;
+
+  const pineInst = new THREE.InstancedMesh(
+    new THREE.ConeGeometry(1.4, 3.8, 7),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
+    pineCoords.length
+  );
+  pineInst.castShadow = true;
+  envRefs.pineInst = pineInst;
+
+  treeCoords.forEach((t, i) => {
+    dummy.position.set(t.x, 0.8 * t.scale, t.z);
+    dummy.scale.setScalar(t.scale);
+    dummy.rotation.set(0, t.shade * 6, 0);
+    dummy.updateMatrix();
+    trunkInst.setMatrixAt(i, dummy.matrix);
+  });
+  deciduousCoords.forEach((t, i) => {
+    dummy.position.set(t.x, 2.2 * t.scale, t.z);
+    dummy.scale.setScalar(t.scale);
+    dummy.rotation.set(0, t.shade * 6, 0);
+    dummy.updateMatrix();
+    crownInst.setMatrixAt(i, dummy.matrix);
+    crownInst.setColorAt(i, colorHelper.setHex(t.shade > 0.5 ? 0x5c8c38 : 0x6e9e42));
+  });
+  pineCoords.forEach((t, i) => {
+    dummy.position.set(t.x, 2.6 * t.scale, t.z);
+    dummy.scale.setScalar(t.scale);
+    dummy.rotation.set(0, t.shade * 6, 0);
+    dummy.updateMatrix();
+    pineInst.setMatrixAt(i, dummy.matrix);
+    pineInst.setColorAt(i, colorHelper.setHex(t.shade > 0.5 ? 0x3b6e4c : 0x457b57));
+  });
+  scene.add(trunkInst, crownInst, pineInst);
+
+  const rockInst = new THREE.InstancedMesh(
+    new THREE.DodecahedronGeometry(0.55, 0),
+    mat(0x8b857c),
+    90
+  );
+  rockInst.castShadow = true;
+  for (let i = 0; i < 90; i++) {
+    const rx = -140 + (i / 90) * 280 + (hash(`r_${i}`, 1) - 0.5) * 6;
+    const side = i % 2 === 0 ? 1 : -1;
+    const rz = riverZ(rx) + side * (RIVER_HALF_WIDTH + 0.8 + hash(`r_${i}`, 2) * 2.5);
+    const s = 0.5 + hash(`r_${i}`, 3) * 0.9;
+    dummy.position.set(rx, 0.2 * s, rz);
+    dummy.scale.set(s * 1.2, s * 0.7, s);
+    dummy.rotation.set(0, hash(`r_${i}`, 4) * 6, 0);
+    dummy.updateMatrix();
+    rockInst.setMatrixAt(i, dummy.matrix);
+  }
+  scene.add(rockInst);
+
+  const flowerInst = new THREE.InstancedMesh(
+    new THREE.ConeGeometry(0.24, 0.45, 5),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
+    300
+  );
+  envRefs.flowerInst = flowerInst;
+  const flowerColors = [0x76a038, 0x76a038, 0xffcf55, 0xf28482, 0xffffff];
+  for (let i = 0; i < 300; i++) {
+    const fx = (hash(`fl_${i}`, 1) - 0.5) * 180;
+    const fz = (hash(`fl_${i}`, 2) - 0.5) * 180;
+    const valid = Math.abs(fz - riverZ(fx)) >= RIVER_HALF_WIDTH + 1.5 && Math.hypot(fx - PLACES.tuz.x, fz - PLACES.tuz.z) > 6.5;
+    envRefs.flowerValid.push(valid);
+    if (!valid) {
+      dummy.scale.setScalar(0);
+    } else {
+      dummy.position.set(fx, 0.22, fz);
+      dummy.scale.setScalar(0.7 + hash(`fl_${i}`, 3) * 0.7);
+      dummy.rotation.set(0, hash(`fl_${i}`, 4) * 3, 0);
+    }
+    dummy.updateMatrix();
+    flowerInst.setMatrixAt(i, dummy.matrix);
+    flowerInst.setColorAt(i, colorHelper.setHex(flowerColors[i % flowerColors.length]));
+  }
+  scene.add(flowerInst);
+}
+buildOptimizedEnvironment();
+
+// --- 4. Nevezetes épületek és Élő Állatok ---
+const landmarkPickers = [];
+const flames = [];
+const smokePuffs = [];
+let windmillBlades = null;
+const pastureAnimals = [];
+let foterRegularGroup = null;
+let foterWinterGroup = null;
+let xmasStarMesh = null;
+
+function registerLandmark(key, group, radius = 4.5, height = 5) {
+  scene.add(group);
+  const picker = new THREE.Mesh(
+    new THREE.BoxGeometry(radius * 2, height, radius * 2),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  picker.position.set(PLACES[key].x, height / 2, PLACES[key].z);
+  picker.userData.placeKey = key;
+  scene.add(picker);
+  landmarkPickers.push(picker);
+}
+
+// 4.1 A Főtér (Tavasztól őszig díszkút, Télen Karácsonyfa + Tábortűz és Bogrács!)
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.tuz.x, 0, PLACES.tuz.z);
+
+  // Macskaköves Főtér burkolat (kör alakú díszburkolat)
+  const plazaOuter = cyl(4.8, 4.9, 0.1, 0x9b9286, 0, 0.05, 0, 24);
+  const plazaInner = cyl(3.7, 3.7, 0.12, 0xb5aba0, 0, 0.06, 0, 20);
+  g.add(plazaOuter, plazaInner);
+
+  // Padok a Főtér szélén
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const bench = box(1.65, 0.38, 0.48, 0x74482a, Math.cos(a) * 3.95, 0.22, Math.sin(a) * 3.95);
+    bench.rotation.y = -a + Math.PI / 2;
+    g.add(bench);
+  }
+
+  // A) Tavasz / Nyár / Ősz: Díszes kőkút a Főtér közepén
+  foterRegularGroup = new THREE.Group();
+  foterRegularGroup.add(cyl(1.45, 1.55, 0.48, 0x8b857c, 0, 0.28, 0, 12));
+  foterRegularGroup.add(cyl(1.2, 1.2, 0.44, 0x4ea5d9, 0, 0.32, 0, 12));
+  foterRegularGroup.add(cyl(0.28, 0.36, 1.65, 0x8b857c, 0, 1.0, 0, 8));
+  foterRegularGroup.add(cyl(0.68, 0.38, 0.26, 0x8b857c, 0, 1.75, 0, 10));
+  foterRegularGroup.add(cone(0.28, 0.55, 0x88d4ff, 0, 2.1, 0, 8));
+  g.add(foterRegularGroup);
+
+  // B) Téli Főtér (Havas tájon): Karácsonyfa + Tábortűz és Bogrács!
+  foterWinterGroup = new THREE.Group();
+  foterWinterGroup.visible = false;
+
+  // 1) Karácsonyfa a Főtér bal-hátsó részén (-1.25, 0, -0.85)
+  const xmasTree = new THREE.Group();
+  xmasTree.position.set(-1.25, 0.08, -0.85);
+  xmasTree.add(cyl(0.28, 0.36, 1.2, 0x5a3a22, 0, 0.6, 0, 8));
+  xmasTree.add(cone(1.9, 2.0, 0x225c36, 0, 1.6, 0, 9));
+  xmasTree.add(cone(1.55, 1.8, 0x2a6f42, 0, 2.65, 0, 9));
+  xmasTree.add(cone(1.18, 1.5, 0x225c36, 0, 3.6, 0, 9));
+  xmasTree.add(cone(0.78, 1.2, 0x2a6f42, 0, 4.4, 0, 9));
+
+  // Csúcsdísz (ragyogó arany csillag)
+  xmasStarMesh = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.38, 0),
+    new THREE.MeshBasicMaterial({ color: 0xffe066 })
+  );
+  xmasStarMesh.position.set(0, 5.15, 0);
+  xmasTree.add(xmasStarMesh);
+
+  // Színes karácsonyfadísz gömbök spirálban a fán
+  const baubleColors = [0xe63946, 0xffcf55, 0x4ea8de, 0xf1faee, 0xff9f1c];
+  for (let i = 0; i < 20; i++) {
+    const tNorm = i / 20;
+    const hY = 1.0 + tNorm * 3.5;
+    const rad = (1 - tNorm * 0.72) * 1.48;
+    const ang = i * 1.35;
+    const bauble = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 7, 7),
+      new THREE.MeshBasicMaterial({ color: baubleColors[i % baubleColors.length] })
+    );
+    bauble.position.set(Math.cos(ang) * rad, hY, Math.sin(ang) * rad);
+    xmasTree.add(bauble);
+  }
+
+  // Ajándékdobozok a karácsonyfa alatt
+  const giftPresets = [
+    { x: 0.75, z: 0.65, c: 0xd62828, s: 0.48 },
+    { x: -0.7, z: 0.72, c: 0x2a9d8f, s: 0.42 },
+    { x: 0.15, z: 0.95, c: 0xe9c46a, s: 0.45 },
+  ];
+  for (const gp of giftPresets) {
+    xmasTree.add(box(gp.s, gp.s, gp.s, gp.c, gp.x, gp.s / 2, gp.z));
+    xmasTree.add(box(gp.s + 0.03, gp.s + 0.02, 0.1, 0xffe066, gp.x, gp.s / 2, gp.z));
+  }
+  foterWinterGroup.add(xmasTree);
+
+  // 2) Téli Tábortűz és Bogrács a Főtér jobb-elülső részén (1.35, 0, 0.85)
+  const winterFire = new THREE.Group();
+  winterFire.position.set(1.35, 0.08, 0.85);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    winterFire.add(box(0.32, 0.22, 0.28, 0x6e685f, Math.cos(a) * 0.82, 0.11, Math.sin(a) * 0.82));
+  }
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const pole = cyl(0.06, 0.08, 3.1, 0x4a2f18, Math.cos(a) * 0.55, 1.4, Math.sin(a) * 0.55, 6);
+    pole.rotation.z = Math.cos(a) * 0.32;
+    pole.rotation.x = -Math.sin(a) * 0.32;
+    winterFire.add(pole);
+  }
+  winterFire.add(cyl(0.62, 0.4, 0.72, 0x2c2930, 0, 1.12, 0, 10));
+  winterFire.add(cyl(0.57, 0.57, 0.05, 0xc84b31, 0, 1.49, 0, 10));
+  for (let i = 0; i < 4; i++) {
+    const f = cone(0.28, 0.75, i % 2 ? 0xffcf55 : 0xf0781f, (i - 1.5) * 0.18, 0.38, (i % 2 - 0.5) * 0.18, 5);
+    winterFire.add(f);
+    flames.push(f);
+  }
+  foterWinterGroup.add(winterFire);
+  g.add(foterWinterGroup);
+
+  for (let i = 0; i < 7; i++) {
+    const puff = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.25, 0),
+      new THREE.MeshBasicMaterial({ color: 0xeae2d3, transparent: true, opacity: 0.6 })
+    );
+    puff.visible = false;
+    scene.add(puff);
+    smokePuffs.push({ mesh: puff, offset: i / 7 });
+  }
+  registerLandmark('tuz', g, 4.5, 5.2);
+}
+
+// 4.2 Fahíd
+{
+  const g = new THREE.Group();
+  const len = BRIDGE.southZ - BRIDGE.northZ;
+  g.position.set(BRIDGE.x, 0, (BRIDGE.southZ + BRIDGE.northZ) / 2);
+  g.add(box(3.4, 0.25, len, 0x8a5a33, 0, 0.45, 0));
+  for (const side of [-1.55, 1.55]) {
+    g.add(box(0.14, 0.12, len, 0x5a3a22, side, 1.15, 0));
+    for (let z = -len / 2 + 0.5; z <= len / 2 - 0.5; z += 2.5) {
+      g.add(box(0.16, 1.2, 0.16, 0x5a3a22, side, 0.6, z));
+    }
+  }
+  registerLandmark('hid', g, 2.5, 2.5);
+}
+
+// 4.3 Kocsma
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.kocsma.x, 0, PLACES.kocsma.z - 4.2);
+  g.add(box(7.2, 2.8, 5.4, 0xf2e8cf, 0, 1.4, 0));
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(5.6, 2.6, 4), mat(0x9e3b24));
+  roof.position.set(0, 4.1, 0);
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  g.add(roof);
+  g.add(box(1.2, 1.9, 0.15, 0x5a3a22, 0, 0.95, 2.72));
+  for (const dx of [-2.4, 2.4]) {
+    g.add(box(1.8, 0.6, 0.9, 0x8a5a33, dx, 0.3, 4.2));
+  }
+  g.add(cyl(0.45, 0.45, 1.0, 0x6b4423, -3.0, 0.5, 2.9, 8));
+  registerLandmark('kocsma', g, 4.5, 5.5);
+}
+
+// 4.4 Vadászház
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.vadaszhaz.x, 0, PLACES.vadaszhaz.z - 3.5);
+  g.add(box(6.0, 2.5, 4.8, 0x74482a, 0, 1.25, 0));
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(4.8, 2.4, 4), mat(0x3b5e3c));
+  roof.position.set(0, 3.7, 0);
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  g.add(roof);
+  for (let i = 0; i < 3; i++) {
+    const log = cyl(0.22, 0.22, 2.2, 0x9a6a3c, 3.6, 0.22 + i * 0.38, 0, 6);
+    log.rotation.x = Math.PI / 2;
+    g.add(log);
+  }
+  registerLandmark('vadaszhaz', g, 4.2, 5.0);
+}
+
+// 4.5 Piac
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.piac.x, 0, PLACES.piac.z);
+  const colors = [0xc8343a, 0xd99b26, 0x3f7350];
+  [-3.2, 0, 3.2].forEach((dx, i) => {
+    g.add(box(2.4, 0.9, 1.4, 0x8a5a33, dx, 0.45, -1.5));
+    g.add(box(2.6, 0.25, 1.8, colors[i], dx, 2.1, -1.5));
+    for (const sx of [-1.05, 1.05]) {
+      g.add(box(0.1, 2.0, 0.1, 0x5a3a22, dx + sx, 1.05, -2.1));
+      g.add(box(0.1, 2.0, 0.1, 0x5a3a22, dx + sx, 1.05, -0.9));
+    }
+  });
+  registerLandmark('piac', g, 4.8, 3.5);
+}
+
+// 4.6 Horgászstég
+{
+  const g = new THREE.Group();
+  const rz = riverZ(PLACES.steg.x);
+  g.position.set(PLACES.steg.x, 0, rz + RIVER_HALF_WIDTH - 1.2);
+  g.add(box(2.0, 0.2, 5.0, 0x8a5a33, 0, 0.4, 0));
+  for (const dz of [-2.0, 0, 2.0]) {
+    g.add(cyl(0.12, 0.12, 1.1, 0x5a3a22, -0.85, 0.1, dz, 6));
+    g.add(cyl(0.12, 0.12, 1.1, 0x5a3a22, 0.85, 0.1, dz, 6));
+  }
+  registerLandmark('steg', g, 2.5, 2.5);
+}
+
+// 4.7 Szélmalom
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.malom.x, 0, PLACES.malom.z);
+  g.add(cyl(1.7, 2.4, 6.2, 0xf3ead6, 0, 3.1, 0, 8));
+  g.add(cone(2.0, 1.8, 0x8c4a27, 0, 7.1, 0, 8));
+  g.add(box(0.9, 1.6, 0.2, 0x5a3a22, 0, 0.8, 2.32));
+
+  windmillBlades = new THREE.Group();
+  windmillBlades.position.set(0, 5.4, 2.05);
+  windmillBlades.add(cyl(0.2, 0.2, 0.6, 0x4a2f18, 0, 0, 0, 6));
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    arm.rotation.z = (i * Math.PI) / 2;
+    arm.add(box(0.14, 3.8, 0.1, 0x5a3a22, 0, 1.9, 0));
+    arm.add(box(0.65, 2.8, 0.04, 0xfff6e0, 0.32, 2.2, 0.04));
+    windmillBlades.add(arm);
+  }
+  g.add(windmillBlades);
+  registerLandmark('malom', g, 4.0, 8.0);
+}
+
+// 4.8 Gémeskút
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.gemeskut.x, 0, PLACES.gemeskut.z);
+  g.add(cyl(1.0, 1.0, 0.9, 0x8b857c, 0, 0.45, 0, 8));
+  g.add(cyl(0.75, 0.75, 0.92, 0x3a7ca5, 0, 0.46, 0, 8));
+  g.add(cyl(0.14, 0.18, 4.2, 0x5a3a22, -1.6, 2.1, 0, 6));
+  const beam = box(4.8, 0.14, 0.14, 0x74482a, -0.4, 4.1, 0);
+  beam.rotation.z = -0.25;
+  g.add(beam);
+  g.add(cyl(0.03, 0.03, 2.4, 0x8a5a33, 1.6, 2.4, 0, 4));
+  g.add(cyl(0.22, 0.18, 0.4, 0x5a3a22, 1.6, 1.1, 0, 7));
+  registerLandmark('gemeskut', g, 2.8, 5.0);
+}
+
+// 4.9 Legelő és Állatok
+{
+  const g = new THREE.Group();
+  g.position.set(PLACES.legelo.x, 0, PLACES.legelo.z);
+  const R = 7.5;
+  for (let i = -R; i <= R; i += 2.5) {
+    g.add(box(0.16, 1.1, 0.16, 0x6b4423, i, 0.55, -R));
+    if (Math.abs(i) > 1.5) g.add(box(0.16, 1.1, 0.16, 0x6b4423, i, 0.55, R));
+    g.add(box(0.16, 1.1, 0.16, 0x6b4423, -R, 0.55, i));
+    g.add(box(0.16, 1.1, 0.16, 0x6b4423, R, 0.55, i));
+  }
+  g.add(box(R * 2, 0.1, 0.1, 0x8a5a33, 0, 0.85, -R));
+  g.add(box(0.1, 0.1, R * 2, 0x8a5a33, -R, 0.85, 0));
+  g.add(box(0.1, 0.1, R * 2, 0x8a5a33, R, 0.85, 0));
+  g.add(box(2.4, 0.5, 0.9, 0x6b4423, -4.2, 0.25, -4.5));
+  g.add(box(2.1, 0.52, 0.65, 0x4ea5d9, -4.2, 0.26, -4.5));
+
+  for (let i = 0; i < 7; i++) {
+    const isCow = i < 3;
+    const animal = new THREE.Group();
+    if (isCow) {
+      animal.add(box(0.9, 0.65, 1.4, 0xf5f5f0, 0, 0.65, 0));
+      animal.add(box(0.45, 0.4, 0.5, 0x3b2f2f, 0.24, 0.72, 0.1));
+      animal.add(box(0.5, 0.48, 0.55, 0xf5f5f0, 0, 0.88, 0.85));
+      for (const [lx, lz] of [[-0.3, -0.5], [0.3, -0.5], [-0.3, 0.5], [0.3, 0.5]]) {
+        animal.add(box(0.16, 0.45, 0.16, 0xf5f5f0, lx, 0.22, lz));
+      }
+    } else {
+      animal.add(box(0.65, 0.5, 0.85, 0xfff8ea, 0, 0.5, 0));
+      animal.add(box(0.35, 0.35, 0.4, 0x3b2f2f, 0, 0.65, 0.52));
+      for (const [lx, lz] of [[-0.2, -0.3], [0.2, -0.3], [-0.2, 0.3], [0.2, 0.3]]) {
+        animal.add(box(0.12, 0.35, 0.12, 0x3b2f2f, lx, 0.17, lz));
+      }
+    }
+    const ax = (hash(`an_${i}`, 1) - 0.5) * 9;
+    const az = (hash(`an_${i}`, 2) - 0.5) * 9;
+    animal.position.set(ax, 0, az);
+    g.add(animal);
+    pastureAnimals.push({ mesh: animal, baseX: ax, baseZ: az, seed: i * 1.7 });
+  }
+  registerLandmark('legelo', g, 6.5, 3.0);
+}
+
+// --- 5. Táj / Évszak (Tavasz, Nyár, Ősz, Tél/Havas) & Független Időjárás Rendszer ---
+let currentSeason = 'nyar';   // 'tavasz' | 'nyar' | 'osz' | 'tel'
+let currentWeather = 'clear'; // 'clear' | 'rain' | 'snow' | 'fog'
+
+const SEASON_PALETTES = {
+  tavasz: {
+    ground: 0x88c452,
+    bank: 0xd6c79c,
+    water: 0x4ea5d9,
+    road: 0xc8b288,
+    daySkyBg: 0x88c452,
+    dayGroundLight: 0x9ec864,
+    // Cseresznyevirág rózsaszín + friss tavaszi rügyzöld lombkoronák
+    leaves: [0xf7a8b8, 0xffd1dc, 0x7ed957, 0x95e06c, 0x6ec24a],
+    pines: [0x3e7a52, 0x4c8c62],
+    flowers: [0xffcf55, 0xf28482, 0xffffff, 0xc77dff, 0x7ed957],
+    showFlowers: true,
+  },
+  nyar: {
+    ground: 0x8fb24a,
+    bank: 0xd5c295,
+    water: 0x4ea5d9,
+    road: 0xc8b082,
+    daySkyBg: 0x8fb24a,
+    dayGroundLight: 0x9ab05a,
+    // Dús nyári zöld falevelek
+    leaves: [0x5c8c38, 0x6e9e42, 0x4f7d2f, 0x65963e],
+    pines: [0x3b6e4c, 0x457b57],
+    flowers: [0x76a038, 0x76a038, 0xffcf55, 0xf28482, 0xffffff],
+    showFlowers: true,
+  },
+  osz: {
+    ground: 0xb59449,
+    bank: 0xc4ae82,
+    water: 0x3d8ab8,
+    road: 0xb89f72,
+    daySkyBg: 0xb59449,
+    dayGroundLight: 0xa88944,
+    // Őszi falevelek: bíborvörös, rozsdabarna, narancs és arany!
+    leaves: [0xc83e2b, 0xe07a2e, 0xe8b838, 0xa85528, 0xd95d39],
+    pines: [0x32593e, 0x3b6648],
+    // Lehullott őszi avar kupacok a földön
+    flowers: [0xe07a2e, 0xc83e2b, 0xe8b838, 0x9e582a],
+    showFlowers: true,
+  },
+  tel: {
+    ground: 0xeaf1f7,
+    bank: 0xdce6ef,
+    water: 0x7ab8de,
+    road: 0xcfd8df,
+    daySkyBg: 0xdce8f2,
+    dayGroundLight: 0xd0dde8,
+    // Havas-zúzmarás lombkoronák és hóval borított fenyők
+    leaves: [0xe8f1f7, 0xd2e2ec, 0xf4f9fc, 0xc5d8e6],
+    pines: [0x8fb5af, 0xb8d4d0, 0xdbe9eb],
+    flowers: [0xf4f9fc],
+    showFlowers: false,
+  },
+};
+
+function applySeason(season) {
+  if (!SEASON_PALETTES[season]) return;
+  currentSeason = season;
+  const pal = SEASON_PALETTES[season];
+  const isWinter = season === 'tel';
+
+  document.querySelectorAll('.season-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.s === season);
+  });
+
+  // 1. Talaj, folyópart, víz és utak színezése
+  if (envRefs.groundMat) envRefs.groundMat.color.setHex(pal.ground);
+  if (envRefs.bankMat) envRefs.bankMat.color.setHex(pal.bank);
+  if (envRefs.waterMat) envRefs.waterMat.color.setHex(pal.water);
+  if (envRefs.roadMat) envRefs.roadMat.color.setHex(pal.road);
+
+  // 2. Falevelek (Lombhullató fák + Fenyők) átszínezése az évszaknak megfelelően!
+  const cHelper = new THREE.Color();
+  if (envRefs.crownInst) {
+    envRefs.deciduousCoords.forEach((t, i) => {
+      const idx = Math.floor(t.shade * pal.leaves.length) % pal.leaves.length;
+      envRefs.crownInst.setColorAt(i, cHelper.setHex(pal.leaves[idx]));
+    });
+    envRefs.crownInst.instanceColor.needsUpdate = true;
+  }
+  if (envRefs.pineInst) {
+    envRefs.pineCoords.forEach((t, i) => {
+      const idx = Math.floor(t.shade * pal.pines.length) % pal.pines.length;
+      envRefs.pineInst.setColorAt(i, cHelper.setHex(pal.pines[idx]));
+    });
+    envRefs.pineInst.instanceColor.needsUpdate = true;
+  }
+
+  // 3. Virágok / Őszi avar / Téli hóréteg
+  if (envRefs.flowerInst) {
+    envRefs.flowerInst.visible = pal.showFlowers;
+    if (pal.showFlowers) {
+      for (let i = 0; i < 300; i++) {
+        envRefs.flowerInst.setColorAt(i, cHelper.setHex(pal.flowers[i % pal.flowers.length]));
+      }
+      envRefs.flowerInst.instanceColor.needsUpdate = true;
+    }
+  }
+
+  // 4. Házak tetején lévő hóréteg ki/bekapcsolása
+  for (const sr of envRefs.snowRoofs) {
+    sr.visible = isWinter;
+  }
+
+  // 5. Főtér átváltása: Télen Tábortűz + Karácsonyfa, más évszakban Díszkút!
+  if (foterRegularGroup) foterRegularGroup.visible = !isWinter;
+  if (foterWinterGroup) foterWinterGroup.visible = isWinter;
+  for (const sp of smokePuffs) {
+    sp.mesh.visible = isWinter;
+  }
+
+  updateFogForWeatherAndSeason();
+  if (typeof updateDaylight === 'function' && typeof currentSec === 'function') {
+    updateDaylight(currentSec(), 0);
+  }
+}
+
+const WEATHER_COUNT = 950;
+const weatherGeo = new THREE.BufferGeometry();
+const weatherPositions = new Float32Array(WEATHER_COUNT * 3);
+for (let i = 0; i < WEATHER_COUNT; i++) {
+  weatherPositions[i * 3] = (Math.random() - 0.5) * 95;
+  weatherPositions[i * 3 + 1] = Math.random() * 40;
+  weatherPositions[i * 3 + 2] = (Math.random() - 0.5) * 95;
+}
+weatherGeo.setAttribute('position', new THREE.BufferAttribute(weatherPositions, 3));
+const weatherMat = new THREE.PointsMaterial({ color: 0xd0e8ff, size: 0.35, transparent: true, opacity: 0.78 });
+const weatherPoints = new THREE.Points(weatherGeo, weatherMat);
+weatherPoints.visible = false;
+scene.add(weatherPoints);
+
+function updateFogForWeatherAndSeason() {
+  if (currentWeather === 'fog') {
+    const fogHex = currentSeason === 'tel' ? 0xdde7f0 : 0xc5cfd6;
+    scene.fog = new THREE.FogExp2(fogHex, 0.015);
+  } else if (currentWeather === 'rain') {
+    scene.fog = new THREE.FogExp2(0x8fa3b8, 0.0038);
+  } else if (currentWeather === 'snow') {
+    scene.fog = new THREE.FogExp2(0xdce6f0, 0.0042);
+  } else {
+    // Derült időjárás (akár havas tájon is kristálytiszta, derült látótávolság!)
+    scene.fog = null;
+  }
+}
+
+function applyWeather(weather) {
+  currentWeather = weather;
+  document.querySelectorAll('.weather-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.w === weather);
+  });
+
+  weatherPoints.visible = weather === 'rain' || weather === 'snow';
+  if (weather === 'rain') {
+    weatherMat.color.setHex(0x9ec5fe);
+    weatherMat.size = 0.28;
+  } else if (weather === 'snow') {
+    weatherMat.color.setHex(0xffffff);
+    weatherMat.size = 0.48;
+  }
+  updateFogForWeatherAndSeason();
+}
+
+document.querySelectorAll('.season-btn').forEach((btn) => {
+  btn.addEventListener('click', () => applySeason(btn.dataset.s));
+});
+document.querySelectorAll('.weather-btn').forEach((btn) => {
+  btn.addEventListener('click', () => applyWeather(btn.dataset.w));
+});
+
+function updateWeather(dt) {
+  if (currentWeather !== 'rain' && currentWeather !== 'snow') return;
+  const pos = weatherGeo.attributes.position.array;
+  const fallSpeed = currentWeather === 'rain' ? 28 : 6.5;
+  const cx = controls.target.x;
+  const cz = controls.target.z;
+
+  for (let i = 0; i < WEATHER_COUNT; i++) {
+    const idx = i * 3;
+    pos[idx + 1] -= fallSpeed * dt;
+    if (currentWeather === 'snow') {
+      pos[idx] += Math.sin(performance.now() * 0.002 + i) * 0.03;
+    }
+    if (pos[idx + 1] < 0) {
+      pos[idx] = cx + (Math.random() - 0.5) * 95;
+      pos[idx + 1] = 35 + Math.random() * 8;
+      pos[idx + 2] = cz + (Math.random() - 0.5) * 95;
+    }
+  }
+  weatherGeo.attributes.position.needsUpdate = true;
+}
+
+// --- 6. Lakosok, Házak és a "Saját házam" 3D Jelzőoszlop ---
+const residents = [];
+const byName = new Map();
+const housePickers = [];
+const figurePickers = [];
+
+// 3D "Saját házam" mutató a saját ház teteje felett (forgó gyűrű + lefelé mutató nyíl)
+const myHomeBeacon = new THREE.Group();
+{
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.85, 1.8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff5a36 })
+  );
+  arrow.rotation.x = Math.PI;
+  arrow.position.y = 5.6;
+  myHomeBeacon.add(arrow);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.8, 3.2, 24),
+    new THREE.MeshBasicMaterial({ color: 0xff5a36, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.08;
+  myHomeBeacon.add(ring);
+  myHomeBeacon.visible = false;
+  scene.add(myHomeBeacon);
+}
+
+function updateMyHomeBeaconPosition() {
+  if (!currentConnectedUser) {
+    myHomeBeacon.visible = false;
+    return;
+  }
+  const myRes = byName.get(currentConnectedUser.toLowerCase());
+  if (!myRes) {
+    myHomeBeacon.visible = false;
+    return;
+  }
+  myHomeBeacon.visible = true;
+  myHomeBeacon.position.set(myRes.x, 0, myRes.z);
+}
+
+function createHouseGroup(res) {
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshLambertMaterial({ color: res.wall || '#f5eedc', flatShading: true });
+  const roofMat = new THREE.MeshLambertMaterial({ color: res.roof || '#c8523b', flatShading: true });
+  const winMat = new THREE.MeshBasicMaterial({ color: 0x3a2e24 });
+
+  const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.2, 3.8), wallMat);
+  wallMesh.position.y = 1.1;
+  wallMesh.castShadow = true;
+  wallMesh.receiveShadow = true;
+  g.add(wallMesh);
+
+  const roofMesh = new THREE.Mesh(new THREE.ConeGeometry(3.6, 2.0, 4), roofMat);
+  roofMesh.position.y = 3.1;
+  roofMesh.rotation.y = Math.PI / 4;
+  roofMesh.castShadow = true;
+  g.add(roofMesh);
+
+  // Téli hóréteg a háztetőn (csak téli/havas tájon látszik)
+  const snowRoof = new THREE.Mesh(
+    new THREE.ConeGeometry(3.52, 1.55, 4),
+    mat(0xf2f7fb)
+  );
+  snowRoof.position.y = 3.38;
+  snowRoof.rotation.y = Math.PI / 4;
+  snowRoof.visible = currentSeason === 'tel';
+  g.add(snowRoof);
+  envRefs.snowRoofs.push(snowRoof);
+
+  g.add(box(0.55, 1.2, 0.55, 0x7a6f64, 1.1, 3.3, -0.6));
+  g.add(box(0.85, 1.55, 0.12, 0x5a3a22, 0, 0.78, 1.92));
+
+  for (const wx of [-1.25, 1.25]) {
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.62, 0.12), winMat);
+    win.position.set(wx, 1.25, 1.92);
+    g.add(win);
+  }
+
+  g.position.set(res.x, 0, res.z);
+  g.rotation.y = res.rot || 0;
+  g.userData = { wallMat, roofMat, winMat, resident: res };
+  wallMesh.userData.resident = res;
+  roofMesh.userData.resident = res;
+  housePickers.push(wallMesh, roofMesh);
+  scene.add(g);
+  return g;
+}
+
+function createVillagerGroup(res) {
+  const g = new THREE.Group();
+  const clothMat = new THREE.MeshLambertMaterial({ color: res.cloth || '#c8343a', flatShading: true });
+
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 1.05, 7), clothMat);
+  body.position.y = 0.55;
+  body.castShadow = true;
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), mat(0xf4cbb2));
+  head.position.y = 1.32;
+  head.castShadow = true;
+  g.add(head);
+
+  const hatBrim = cyl(0.42, 0.42, 0.06, 0x3b2818, 0, 1.52, 0, 8);
+  const hatTop = cyl(0.24, 0.27, 0.25, 0x3b2818, 0, 1.65, 0, 8);
+  g.add(hatBrim, hatTop);
+
+  g.userData = { clothMat, resident: res };
+  body.userData.residentFigure = res;
+  head.userData.residentFigure = res;
+  figurePickers.push(body, head);
+  scene.add(g);
+  return g;
+}
+
+function addResidentToWorld(raw) {
+  const doorDist = 2.9;
+  const door = [
+    raw.x + Math.sin(raw.rot || 0) * doorDist,
+    raw.z + Math.cos(raw.rot || 0) * doorDist,
+  ];
+  const res = {
+    ...raw,
+    door,
+    speed: 3.0 + hash(raw.name, 3) * 1.4,
+  };
+  res.houseGroup = createHouseGroup(res);
+  res.figureGroup = createVillagerGroup(res);
+  residents.push(res);
+  byName.set(res.name.toLowerCase(), res);
+  if (!housePrivacyMap[res.name.toLowerCase()]) {
+    housePrivacyMap[res.name.toLowerCase()] = 'public';
+  }
+  el('resident-count').textContent = `${residents.length} lakos · ${villageData.day || 5}. nap`;
+  return res;
+}
+
+villageData.residents.forEach(addResidentToWorld);
+updateClaimButtonUI();
+updateMyHomeBeaconPosition();
+
+// --- 7. Determinisztikus Napirend és Útvonal-számítás ---
+function spotNearPlace(res, placeKey) {
+  const p = PLACES[placeKey] || PLACES.tuz;
+  const angle = hash(res.name, 10 + placeKey.length) * Math.PI * 2;
+  const r = (0.35 + 0.65 * Math.sqrt(hash(res.name, 20 + placeKey.length))) * p.r;
+  return [p.x + Math.cos(angle) * r, p.z + Math.sin(angle) * r];
+}
+
+function buildWaypoints(x1, z1, x2, z2) {
+  const side1 = z1 > riverZ(x1);
+  const side2 = z2 > riverZ(x2);
+  if (side1 === side2) return [[x1, z1], [x2, z2]];
+  const firstBridgeZ = side1 ? BRIDGE.southZ : BRIDGE.northZ;
+  const secondBridgeZ = side1 ? BRIDGE.northZ : BRIDGE.southZ;
+  return [
+    [x1, z1],
+    [BRIDGE.x, firstBridgeZ],
+    [BRIDGE.x, secondBridgeZ],
+    [x2, z2],
+  ];
+}
+
+function measureRoute(points) {
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++) {
+    const d = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+    lengths.push(lengths[i - 1] + d);
+  }
+  return { points, lengths, total: lengths[lengths.length - 1] || 0.01 };
+}
+
+function positionAlong(route, dist) {
+  const { points, lengths, total } = route;
+  const d = Math.max(0, Math.min(total, dist));
+  let i = 1;
+  while (i < lengths.length - 1 && lengths[i] < d) i++;
+  const span = (lengths[i] - lengths[i - 1]) || 1;
+  const k = (d - lengths[i - 1]) / span;
+  const [ax, az] = points[i - 1];
+  const [bx, bz] = points[i];
+  return {
+    x: ax + (bx - ax) * k,
+    z: az + (bz - az) * k,
+    heading: Math.atan2(bx - ax, bz - az),
+  };
+}
+
+function whereIs(res, sec) {
+  const leaveMorning = 7 * HOUR + hash(res.name, 101) * 900;
+  const leaveWork = (16 + hash(res.name, 102) * 2.2) * HOUR;
+  const fireStart = 20 * HOUR - hash(res.name, 103) * 600;
+  const fireEnd = 21.5 * HOUR + hash(res.name, 104) * 900;
+
+  if (sec >= fireStart && sec <= fireEnd + 900) {
+    const fireSpot = spotNearPlace(res, 'tuzkor');
+    const toFire = measureRoute(buildWaypoints(res.door[0], res.door[1], fireSpot[0], fireSpot[1]));
+    const walkDur = toFire.total / res.speed;
+    if (sec < fireStart + walkDur) {
+      const p = positionAlong(toFire, (sec - fireStart) * res.speed);
+      return { mode: 'walk', targetKey: 'tuz', ...p };
+    }
+    if (sec < fireEnd) {
+      return {
+        mode: 'esti',
+        targetKey: 'tuz',
+        x: fireSpot[0],
+        z: fireSpot[1],
+        heading: Math.atan2(PLACES.tuz.x - fireSpot[0], PLACES.tuz.z - fireSpot[1]),
+      };
+    }
+    const fromFire = measureRoute(buildWaypoints(fireSpot[0], fireSpot[1], res.door[0], res.door[1]));
+    if (sec < fireEnd + fromFire.total / res.speed) {
+      const p = positionAlong(fromFire, (sec - fireEnd) * res.speed);
+      return { mode: 'walk', targetKey: null, ...p };
+    }
+  }
+
+  const workKey = (res.place === 'szabad' || !PLACES[res.place])
+    ? WORK_PLACES[Math.floor(hash(res.name, Math.floor(sec / 1800) + 50) * WORK_PLACES.length)]
+    : res.place;
+
+  const targetSpot = spotNearPlace(res, workKey);
+  const toWork = measureRoute(buildWaypoints(res.door[0], res.door[1], targetSpot[0], targetSpot[1]));
+  const walkDur = toWork.total / res.speed;
+
+  if (sec >= leaveMorning && sec < leaveMorning + walkDur) {
+    const p = positionAlong(toWork, (sec - leaveMorning) * res.speed);
+    return { mode: 'walk', targetKey: workKey, ...p };
+  }
+  if (sec >= leaveMorning + walkDur && sec < leaveWork) {
+    const sway = hash(res.name, 77) * 6.28;
+    return {
+      mode: 'work',
+      targetKey: workKey,
+      x: targetSpot[0] + Math.sin(sec * 0.35 + sway) * 0.55,
+      z: targetSpot[1] + Math.cos(sec * 0.28 + sway) * 0.55,
+      heading: Math.sin(sec * 0.2 + sway) * Math.PI,
+    };
+  }
+  const fromWork = measureRoute(buildWaypoints(targetSpot[0], targetSpot[1], res.door[0], res.door[1]));
+  if (sec >= leaveWork && sec < leaveWork + fromWork.total / res.speed) {
+    const p = positionAlong(fromWork, (sec - leaveWork) * res.speed);
+    return { mode: 'walk', targetKey: null, ...p };
+  }
+  return { mode: 'home', targetKey: null, x: res.door[0], z: res.door[1], heading: res.rot || 0 };
+}
+
+// --- 8. TELJES 3D FORGATHATÓ KAMERA (360° Forgatás + Döntés + Vezérlő Widget) ---
+const controls = new MapControls(camera, renderer.domElement);
+controls.enableRotate = true; // 3D forgatás engedélyezve!
+controls.rotateSpeed = 0.85;
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+controls.minDistance = 14;
+controls.maxDistance = 175;
+controls.minPolarAngle = 0.22;              // Felülnézet közelében
+controls.maxPolarAngle = Math.PI / 2 - 0.08; // Ne menjen a föld alá
+controls.screenSpacePanning = false;
+
+let camAzimuth = 0;
+let camPolar = DEFAULT_POLAR;
+let leftMouseRotates = false;
+
+// Kamera pozíció beállítása úgy, hogy MEGTARTJA a választott 3D forgatási szöget (azimuth & polar)!
+function setView(x, z, dist, azimuth = camAzimuth, polar = camPolar) {
+  camAzimuth = azimuth;
+  camPolar = polar;
+  controls.target.set(x, 0, z);
+  const sinP = Math.sin(polar);
+  const cosP = Math.cos(polar);
+  camera.position.set(
+    x + dist * sinP * Math.sin(azimuth),
+    dist * cosP,
+    z + dist * sinP * Math.cos(azimuth)
+  );
+  controls.update();
+}
+setView(0, 2, 76, 0, DEFAULT_POLAR);
+
+// Amikor a felhasználó egérrel forgatja a kamerát, elmentjük az aktuális szöget
+controls.addEventListener('change', () => {
+  if (!flight && !behindMode && !walker) {
+    camAzimuth = controls.getAzimuthalAngle();
+    camPolar = controls.getPolarAngle();
+  }
+});
+
+let flight = null;
+function flyTo(x, z, dist = 32, targetAzimuth = camAzimuth, targetPolar = camPolar) {
+  const fromDist = camera.position.distanceTo(controls.target);
+  flight = {
+    t: 0,
+    fromX: controls.target.x,
+    fromZ: controls.target.z,
+    fromDist,
+    fromAzimuth: camAzimuth,
+    fromPolar: camPolar,
+    x,
+    z,
+    dist,
+    targetAzimuth,
+    targetPolar,
+  };
+}
+
+// Jobb alsó 3D Kamera gombok (Forgatás balra/jobbra, Döntési szög, Észak, Bal egérgomb módváltó)
+el('cam-rot-left').addEventListener('click', () => {
+  const dist = camera.position.distanceTo(controls.target);
+  flyTo(controls.target.x, controls.target.z, dist, camAzimuth + Math.PI / 4, camPolar);
+});
+el('cam-rot-right').addEventListener('click', () => {
+  const dist = camera.position.distanceTo(controls.target);
+  flyTo(controls.target.x, controls.target.z, dist, camAzimuth - Math.PI / 4, camPolar);
+});
+el('cam-tilt-btn').addEventListener('click', () => {
+  const dist = camera.position.distanceTo(controls.target);
+  const nextPolar = camPolar > 0.9 ? 0.42 : camPolar < 0.55 ? 0.78 : 1.18;
+  flyTo(controls.target.x, controls.target.z, dist, camAzimuth, nextPolar);
+});
+el('cam-reset-north').addEventListener('click', () => {
+  const dist = camera.position.distanceTo(controls.target);
+  flyTo(controls.target.x, controls.target.z, dist, 0, DEFAULT_POLAR);
+});
+el('cam-left-mode').addEventListener('click', () => {
+  leftMouseRotates = !leftMouseRotates;
+  controls.mouseButtons.LEFT = leftMouseRotates ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  controls.mouseButtons.RIGHT = leftMouseRotates ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  const btn = el('cam-left-mode');
+  btn.classList.toggle('active', leftMouseRotates);
+  btn.textContent = leftMouseRotates
+    ? '🔄 Bal egér: 3D Forgatás (Jobb egér: Mozgatás)'
+    : '✋ Bal egér: Mozgatás (Jobb egér: 3D Forgatás)';
+});
+
+const pin = cone(0.65, 1.5, 0xffcf55, 0, 5, 0, 6);
+pin.rotation.x = Math.PI;
+pin.visible = false;
+scene.add(pin);
+
+// --- 8.5 Időkezelés és Napszak-fények ---
+let liveTime = true;
+let manualSec = 12 * HOUR;
+const slider = el('time-slider');
+const liveBtn = el('time-live-btn');
+const modeLabel = el('time-mode-label');
+
+slider.addEventListener('input', () => {
+  liveTime = false;
+  liveBtn.classList.remove('active');
+  modeLabel.textContent = 'Kézi csúszka';
+  manualSec = Number(slider.value) * 60;
+});
+liveBtn.addEventListener('click', () => {
+  liveTime = true;
+  liveBtn.classList.add('active');
+  modeLabel.textContent = 'Élő idő';
+});
+
+function currentSec() {
+  if (liveTime) {
+    const now = new Date();
+    const s = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
+    slider.value = String(Math.floor(s / 60));
+    return s;
+  }
+  return manualSec;
+}
+
+const LIGHT_KEYFRAMES = [
+  { h: 0, sky: 0x3b4e78, ground: 0x1a1e16, hemi: 0.35, sun: 0x7b92c4, power: 0.3, fire: 28, bg: 0x0b101d },
+  { h: 5.5, sky: 0x3b4e78, ground: 0x1a1e16, hemi: 0.35, sun: 0x7b92c4, power: 0.3, fire: 28, bg: 0x0b101d },
+  { h: 7, sky: 0xffd296, ground: 0x8a7240, hemi: 0.9, sun: 0xffae52, power: 1.9, fire: 14, bg: 0x736232 },
+  { h: 8.5, sky: 0xffffff, ground: 0x9ab05a, hemi: 1.15, sun: 0xfff0cf, power: 3.0, fire: 6, bg: 0x8fb24a },
+  { h: 18, sky: 0xffffff, ground: 0x9ab05a, hemi: 1.15, sun: 0xfff0cf, power: 3.0, fire: 6, bg: 0x8fb24a },
+  { h: 19.5, sky: 0xffc88a, ground: 0x826438, hemi: 0.95, sun: 0xff9d42, power: 2.0, fire: 20, bg: 0x6e5630 },
+  { h: 21, sky: 0x4b4468, ground: 0x2a241e, hemi: 0.45, sun: 0x9c6b78, power: 0.5, fire: 30, bg: 0x181524 },
+  { h: 24, sky: 0x3b4e78, ground: 0x1a1e16, hemi: 0.35, sun: 0x7b92c4, power: 0.3, fire: 28, bg: 0x0b101d },
+];
+const tmpColorA = new THREE.Color();
+const tmpColorB = new THREE.Color();
+
+function updateDaylight(sec, outsideCount) {
+  const hour = sec / HOUR;
+  let i = 0;
+  while (i < LIGHT_KEYFRAMES.length - 2 && LIGHT_KEYFRAMES[i + 1].h <= hour) i++;
+  const a = LIGHT_KEYFRAMES[i];
+  const b = LIGHT_KEYFRAMES[i + 1];
+  const k = (hour - a.h) / ((b.h - a.h) || 1);
+
+  const pal = SEASON_PALETTES[currentSeason] || SEASON_PALETTES.nyar;
+  const aGround = (a.h >= 8 && a.h <= 18.5) ? pal.dayGroundLight : a.ground;
+  const bGround = (b.h >= 8 && b.h <= 18.5) ? pal.dayGroundLight : b.ground;
+  const aBg = (a.h >= 8 && a.h <= 18.5) ? pal.daySkyBg : a.bg;
+  const bBg = (b.h >= 8 && b.h <= 18.5) ? pal.daySkyBg : b.bg;
+
+  hemiLight.color.copy(tmpColorA.setHex(a.sky)).lerp(tmpColorB.setHex(b.sky), k);
+  hemiLight.groundColor.copy(tmpColorA.setHex(aGround)).lerp(tmpColorB.setHex(bGround), k);
+  hemiLight.intensity = a.hemi + (b.hemi - a.hemi) * k;
+
+  sun.color.copy(tmpColorA.setHex(a.sun)).lerp(tmpColorB.setHex(b.sun), k);
+  sun.intensity = a.power + (b.power - a.power) * k;
+
+  scene.background.copy(tmpColorA.setHex(aBg)).lerp(tmpColorB.setHex(bBg), k);
+  const fireBase = a.fire + (b.fire - a.fire) * k;
+  // Télen a tábortűz és a karácsonyfa meleg fénye erősebben világít a Főtéren
+  const seasonFireFactor = currentSeason === 'tel' ? 1.15 : 0.35;
+  fireLight.intensity = fireBase * seasonFireFactor * (1 + Math.sin(performance.now() * 0.012) * 0.12);
+
+  const lampsOn = hour >= 18.2 || hour < 6.5;
+  for (const bm of streetLampBulbs) {
+    bm.color.setHex(lampsOn ? 0xffe082 : 0x555045);
+  }
+
+  for (const res of residents) {
+    const sleepHour = 21.8 + hash(res.name, 9) * 2.0;
+    const isLit = (hour >= 18.5 && hour < sleepHour) || (hour >= 5.5 && hour < 6.8);
+    res.houseGroup.userData.winMat.color.setHex(isLit ? 0xffd470 : 0x3a2e24);
+  }
+
+  const hh = String(Math.floor(hour)).padStart(2, '0');
+  const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  el('clock-text').textContent = `${hh}:${mm} · ${outsideCount} lakos van kint`;
+}
+
+// --- 9. 3D SZOBA BELSŐ NÉZET (Interior Scene) ---
+let inRoomMode = false;
+let activeRoomData = null;
+let selectedFurnitureId = null;
+let draggingFurnitureMesh = null;
+
+const roomScene = new THREE.Scene();
+roomScene.background = new THREE.Color(0x231912);
+const roomCamera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 100);
+const roomControls = new OrbitControls(roomCamera, renderer.domElement);
+roomControls.enableDamping = true;
+roomControls.enabled = false;
+roomControls.maxPolarAngle = Math.PI / 2 - 0.08;
+roomControls.minDistance = 4.5;
+roomControls.maxDistance = 16;
+
+const roomHemi = new THREE.HemisphereLight(0xfff5e4, 0x5a3e28, 1.25);
+roomScene.add(roomHemi);
+const roomPoint = new THREE.PointLight(0xffb86c, 2.2, 18);
+roomPoint.position.set(0, 4.2, 0);
+roomPoint.castShadow = true;
+roomScene.add(roomPoint);
+
+const roomFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(6.4, 0.25, 6.4),
+  new THREE.MeshLambertMaterial({ color: 0xb07d4f })
+);
+roomFloor.position.y = -0.125;
+roomFloor.receiveShadow = true;
+roomScene.add(roomFloor);
+
+const backWall = new THREE.Mesh(new THREE.BoxGeometry(6.4, 3.4, 0.25), mat(0xf5eedc));
+backWall.position.set(0, 1.7, -3.1);
+backWall.receiveShadow = true;
+roomScene.add(backWall);
+
+const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.4, 6.4), mat(0xede2c9));
+leftWall.position.set(-3.1, 1.7, 0);
+leftWall.receiveShadow = true;
+roomScene.add(leftWall);
+
+roomScene.add(box(1.5, 1.2, 0.3, 0x8fd0e8, 1.2, 1.9, -3.08));
+roomScene.add(box(1.65, 0.12, 0.34, 0x5a3a22, 1.2, 1.28, -3.06));
+
+const furnitureGroup = new THREE.Group();
+roomScene.add(furnitureGroup);
+const furnitureMeshes = [];
+
+function build3DFurnitureModel(item) {
+  const g = new THREE.Group();
+  if (!item.unboxed) {
+    g.add(box(0.85, 0.75, 0.85, 0xe63946, 0, 0.38, 0));
+    g.add(box(0.9, 0.78, 0.18, 0xffcf55, 0, 0.39, 0));
+    g.add(box(0.18, 0.78, 0.9, 0xffcf55, 0, 0.39, 0));
+  } else {
+    switch (item.type) {
+      case 'agy':
+        g.add(box(1.5, 0.4, 2.2, 0x6b4423, 0, 0.2, 0));
+        g.add(box(1.36, 0.22, 1.95, 0xc8343a, 0, 0.45, 0.05));
+        g.add(box(1.2, 0.18, 0.45, 0xfff8ea, 0, 0.6, -0.68));
+        g.add(box(1.5, 0.95, 0.16, 0x5a3a22, 0, 0.48, -1.05));
+        break;
+      case 'asztal':
+        g.add(box(1.7, 0.12, 1.1, 0x8a5a33, 0, 0.78, 0));
+        for (const [lx, lz] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) {
+          g.add(box(0.12, 0.75, 0.12, 0x5a3a22, lx, 0.38, lz));
+        }
+        break;
+      case 'szek':
+        g.add(box(0.6, 0.08, 0.6, 0x8a5a33, 0, 0.46, 0));
+        g.add(box(0.6, 0.55, 0.08, 0x6b4423, 0, 0.75, -0.26));
+        for (const [lx, lz] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) {
+          g.add(box(0.08, 0.45, 0.08, 0x5a3a22, lx, 0.22, lz));
+        }
+        break;
+      case 'szonyeg':
+        g.add(cyl(1.45, 1.45, 0.03, 0xb5382a, 0, 0.02, 0, 16));
+        g.add(cyl(1.05, 1.05, 0.035, 0xffcf55, 0, 0.022, 0, 16));
+        break;
+      case 'kandallo':
+        g.add(box(1.6, 1.6, 0.8, 0x7a7267, 0, 0.8, 0));
+        g.add(box(0.9, 0.85, 0.5, 0x221d1a, 0, 0.45, 0.2));
+        g.add(cone(0.28, 0.55, 0xff7b29, 0, 0.3, 0.25, 6));
+        break;
+      case 'trofea':
+        g.add(box(0.55, 0.65, 0.45, 0x74482a, 0, 0.35, 0));
+        g.add(cyl(0.05, 0.08, 0.9, 0xe8dcc0, -0.3, 0.9, 0, 5));
+        g.add(cyl(0.05, 0.08, 0.9, 0xe8dcc0, 0.3, 0.9, 0, 5));
+        break;
+      case 'lada':
+        g.add(box(1.1, 0.65, 0.7, 0x6b4423, 0, 0.32, 0));
+        g.add(box(1.14, 0.12, 0.74, 0xd99b26, 0, 0.45, 0));
+        break;
+      default:
+        g.add(cyl(0.5, 0.32, 0.65, 0xffcf55, 0, 0.35, 0, 10));
+        break;
+    }
+  }
+
+  g.position.set(item.x || 0, 0, item.z || 0);
+  g.rotation.y = item.rot || 0;
+  g.userData.item = item;
+  g.traverse((node) => {
+    if (node.isMesh) {
+      node.userData.furnitureGroup = g;
+      furnitureMeshes.push(node);
+    }
+  });
+  return g;
+}
+
+function rebuildRoom3D() {
+  furnitureGroup.clear();
+  furnitureMeshes.length = 0;
+  if (!activeRoomData) return;
+
+  for (const item of activeRoomData.items) {
+    if (!item.placed) continue;
+    const model = build3DFurnitureModel(item);
+    if (item.id === selectedFurnitureId) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.75, 0.9, 20),
+        new THREE.MeshBasicMaterial({ color: 0xff5a36, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.04;
+      model.add(ring);
+    }
+    furnitureGroup.add(model);
+  }
+}
+
+function renderRoomEditorUI() {
+  if (!activeRoomData) return;
+  const isOwner = activeRoomData.isOwner;
+  el('room-editor').hidden = !isOwner;
+
+  const badge = el('room-badge');
+  badge.textContent = activeRoomData.privacy === 'private' ? '🔒 Zárt ház' : '🌍 Nyitott ház';
+  badge.className = `badge ${activeRoomData.privacy === 'private' ? 'locked' : 'open'}`;
+
+  if (!isOwner) {
+    el('room-subtitle').textContent = 'Vendégségben vagy. Forgasd a kamerát egérrel a szoba megtekintéséhez!';
+    return;
+  }
+
+  el('room-subtitle').textContent = 'Saját szobád: kattints egy bútorra lent a lerakáshoz, vagy húzd a padlón egérrel!';
+
+  const invBar = el('room-inventory');
+  invBar.replaceChildren(...activeRoomData.items.map((item) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isGift = !item.unboxed;
+    btn.className = `inv-btn ${item.placed ? 'placed' : ''} ${item.id === selectedFurnitureId ? 'selected' : ''} ${isGift ? 'gift-box' : ''}`;
+    btn.textContent = isGift
+      ? `🎁 Ajándék (@${item.giftFrom}-tól) – Kattints a kibontáshoz!`
+      : `${item.label} ${item.placed ? '✓' : '(Raktárban)'}`;
+    btn.addEventListener('click', () => {
+      if (isGift) {
+        item.unboxed = true;
+        item.placed = true;
+        selectedFurnitureId = item.id;
+        rebuildRoom3D();
+        renderRoomEditorUI();
+        return;
+      }
+      if (!item.placed) {
+        item.placed = true;
+        selectedFurnitureId = item.id;
+      } else {
+        selectedFurnitureId = item.id;
+      }
+      rebuildRoom3D();
+      renderRoomEditorUI();
+    });
+    return btn;
+  }));
+
+  const privBtn = el('room-privacy-btn');
+  privBtn.textContent = activeRoomData.privacy === 'private'
+    ? '🔒 Ház: Zárt (Csak meghívóval)'
+    : '🌍 Ház: Nyitott (Publikus)';
+
+  if (activeRoomData.inviteKey) {
+    const link = `${window.location.origin}/#haz=${encodeURIComponent(activeRoomData.owner)}&kulcs=${encodeURIComponent(activeRoomData.inviteKey)}`;
+    el('room-invite-input').value = link;
+  }
+
+  const guestContainer = el('room-guest-tags');
+  guestContainer.replaceChildren(...(activeRoomData.guestList || []).map((gName) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'mini-btn';
+    chip.textContent = `@${gName} ×`;
+    chip.addEventListener('click', () => {
+      activeRoomData.guestList = activeRoomData.guestList.filter((x) => x !== gName);
+      renderRoomEditorUI();
+    });
+    return chip;
+  }));
+
+  const giftSelect = el('gift-item-select');
+  giftSelect.replaceChildren(...activeRoomData.items.map((item) => {
+    const opt = document.createElement('option');
+    opt.value = item.id;
+    opt.textContent = item.label;
+    return opt;
+  }));
+}
+
+async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
+  const lower = houseOwnerName.toLowerCase();
+  const savedKeys = getSavedInviteKeys();
+  const keyToUse = explicitInviteKey || savedKeys[lower] || '';
+
+  const resp = await apiFetch(`/api/house?name=${encodeURIComponent(lower)}&key=${encodeURIComponent(keyToUse)}`);
+  const data = await resp.json();
+
+  if (!resp.ok || !data.allowed) {
+    el('card-status').textContent = `🔒 ${data.message || 'Ez a ház zárt, csak meghívóval látogatható!'}`;
+    return;
+  }
+
+  if (explicitInviteKey) {
+    saveInviteKeyForHouse(lower, explicitInviteKey);
+  }
+
+  activeRoomData = data;
+  selectedFurnitureId = data.items.find((i) => i.placed)?.id || null;
+  inRoomMode = true;
+
+  el('top').hidden = true;
+  el('vote').hidden = true;
+  el('cam-widget').hidden = true;
+  el('home-compass-pointer').hidden = true;
+  el('card').hidden = true;
+  el('labels').hidden = true;
+  el('claim-drawer').hidden = true;
+  el('room-hud').hidden = false;
+  el('room-title').textContent = `🏠 @${data.owner} szobája`;
+
+  controls.enabled = false;
+  roomControls.enabled = true;
+  roomCamera.position.set(5.5, 5.2, 6.5);
+  roomControls.target.set(0, 0.6, 0);
+  roomControls.update();
+
+  rebuildRoom3D();
+  renderRoomEditorUI();
+}
+
+function exitRoomInterior() {
+  inRoomMode = false;
+  activeRoomData = null;
+  draggingFurnitureMesh = null;
+  roomControls.enabled = false;
+  controls.enabled = true;
+
+  el('room-hud').hidden = true;
+  el('top').hidden = false;
+  el('vote').hidden = false;
+  el('cam-widget').hidden = false;
+  el('labels').hidden = false;
+}
+
+el('room-exit-btn').addEventListener('click', exitRoomInterior);
+
+el('room-rotate-btn').addEventListener('click', () => {
+  if (!activeRoomData?.isOwner || !selectedFurnitureId) return;
+  const item = activeRoomData.items.find((i) => i.id === selectedFurnitureId);
+  if (item) {
+    item.rot = ((item.rot || 0) + Math.PI / 2) % (Math.PI * 2);
+    rebuildRoom3D();
+  }
+});
+
+el('room-remove-btn').addEventListener('click', () => {
+  if (!activeRoomData?.isOwner || !selectedFurnitureId) return;
+  const item = activeRoomData.items.find((i) => i.id === selectedFurnitureId);
+  if (item) {
+    item.placed = false;
+    rebuildRoom3D();
+    renderRoomEditorUI();
+  }
+});
+
+el('room-privacy-btn').addEventListener('click', () => {
+  if (!activeRoomData?.isOwner) return;
+  activeRoomData.privacy = activeRoomData.privacy === 'public' ? 'private' : 'public';
+  housePrivacyMap[activeRoomData.owner.toLowerCase()] = activeRoomData.privacy;
+  renderRoomEditorUI();
+});
+
+el('room-invite-toggle').addEventListener('click', () => {
+  el('room-gift-panel').hidden = true;
+  el('room-invite-panel').hidden = !el('room-invite-panel').hidden;
+});
+
+el('room-gift-toggle').addEventListener('click', () => {
+  el('room-invite-panel').hidden = true;
+  el('room-gift-panel').hidden = !el('room-gift-panel').hidden;
+});
+
+el('room-copy-invite').addEventListener('click', async () => {
+  const input = el('room-invite-input');
+  try {
+    await navigator.clipboard.writeText(input.value);
+    el('room-copy-invite').textContent = '✓ Kimásolva!';
+  } catch {
+    input.select();
+  }
+  setTimeout(() => { el('room-copy-invite').textContent = 'Másolás'; }, 2000);
+});
+
+el('room-rekey-btn').addEventListener('click', async () => {
+  const resp = await apiFetch('/api/house/rekey', { method: 'POST' });
+  if (resp.ok) {
+    const data = await resp.json();
+    activeRoomData.inviteKey = data.inviteKey;
+    renderRoomEditorUI();
+  }
+});
+
+el('room-guest-add').addEventListener('click', () => {
+  const val = el('room-guest-input').value.trim().replace(/^@/, '');
+  if (!val || !activeRoomData) return;
+  if (!activeRoomData.guestList.includes(val)) {
+    activeRoomData.guestList.push(val);
+  }
+  el('room-guest-input').value = '';
+  renderRoomEditorUI();
+});
+
+el('room-save-btn').addEventListener('click', async () => {
+  if (!activeRoomData?.isOwner) return;
+  const btn = el('room-save-btn');
+  btn.textContent = 'Mentés…';
+  const resp = await apiFetch('/api/house/save', {
+    method: 'POST',
+    body: JSON.stringify({
+      privacy: activeRoomData.privacy,
+      guestList: activeRoomData.guestList,
+      items: activeRoomData.items,
+    }),
+  });
+  if (resp.ok) {
+    housePrivacyMap[activeRoomData.owner.toLowerCase()] = activeRoomData.privacy;
+    btn.textContent = '✓ Elmentve!';
+  } else {
+    btn.textContent = 'Hiba a mentéskor';
+  }
+  setTimeout(() => { btn.textContent = '💾 Berendezés mentése'; }, 1800);
+});
+
+el('gift-send-btn').addEventListener('click', async () => {
+  const itemId = el('gift-item-select').value;
+  const toUsername = el('gift-target-input').value.trim();
+  const msgEl = el('gift-status-msg');
+  msgEl.hidden = false;
+
+  const resp = await apiFetch('/api/house/gift', {
+    method: 'POST',
+    body: JSON.stringify({ itemId, toUsername }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = data.error || 'Nem sikerült elküldeni.';
+    return;
+  }
+  activeRoomData.items = data.items;
+  el('gift-target-input').value = '';
+  msgEl.style.color = 'var(--green)';
+  msgEl.textContent = `🎁 Ajándék elküldve @${data.giftedTo} szobájába!`;
+  rebuildRoom3D();
+  renderRoomEditorUI();
+});
+
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const planeIntersect = new THREE.Vector3();
+const roomRaycaster = new THREE.Raycaster();
+const roomPointer = new THREE.Vector2();
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (!inRoomMode || !activeRoomData?.isOwner) return;
+  roomPointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  roomRaycaster.setFromCamera(roomPointer, roomCamera);
+  const hitList = roomRaycaster.intersectObjects(furnitureMeshes, false);
+  if (hitList.length) {
+    const fg = hitList[0].object.userData.furnitureGroup;
+    if (fg) {
+      const item = fg.userData.item;
+      if (!item.unboxed) item.unboxed = true;
+      selectedFurnitureId = item.id;
+      draggingFurnitureMesh = fg;
+      roomControls.enabled = false;
+      rebuildRoom3D();
+      renderRoomEditorUI();
+    }
+  }
+});
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!inRoomMode || !draggingFurnitureMesh) return;
+  roomPointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  roomRaycaster.setFromCamera(roomPointer, roomCamera);
+  if (roomRaycaster.ray.intersectPlane(floorPlane, planeIntersect)) {
+    const nx = Math.max(-2.3, Math.min(2.3, Math.round(planeIntersect.x * 4) / 4));
+    const nz = Math.max(-2.3, Math.min(2.3, Math.round(planeIntersect.z * 4) / 4));
+    const item = draggingFurnitureMesh.userData.item;
+    item.x = nx;
+    item.z = nz;
+    rebuildRoom3D();
+  }
+});
+
+window.addEventListener('pointerup', () => {
+  if (inRoomMode && draggingFurnitureMesh) {
+    draggingFurnitureMesh = null;
+    roomControls.enabled = true;
+  }
+});
+
+// --- 10. "Saját házam" ugrás & DM Fiók-összekötő Panel ---
+let pendingClaimCode = null;
+
+function flyToMyOwnHouse() {
+  if (!currentConnectedUser) {
+    openClaimDrawer();
+    return;
+  }
+  const myRes = byName.get(currentConnectedUser.toLowerCase());
+  if (!myRes) {
+    openClaimDrawer();
+    return;
+  }
+  el('claim-drawer').hidden = true;
+  el('search-dropdown').hidden = true;
+  selectHouse(myRes);
+}
+
+el('my-house-btn').addEventListener('click', flyToMyOwnHouse);
+el('my-home-tag').addEventListener('click', flyToMyOwnHouse);
+el('home-compass-pointer').addEventListener('click', flyToMyOwnHouse);
+
+function populateQuickSelect() {
+  const sel = el('claim-quick-select');
+  const sorted = [...residents].sort((a, b) => b.name.localeCompare(a.name, 'hu'));
+  sel.replaceChildren(...sorted.map((r) => {
+    const opt = document.createElement('option');
+    opt.value = r.name;
+    opt.textContent = `@${r.name} (${r.title})`;
+    if (currentConnectedUser && r.name.toLowerCase() === currentConnectedUser.toLowerCase()) {
+      opt.selected = true;
+    }
+    return opt;
+  }));
+}
+
+function openClaimDrawer(prefillName = '') {
+  el('add-drawer').hidden = true;
+  el('chronicle-drawer').hidden = true;
+  el('claim-drawer').hidden = false;
+  el('claim-msg').hidden = true;
+  populateQuickSelect();
+
+  if (currentConnectedUser) {
+    el('claim-step-1').hidden = true;
+    el('claim-step-2').hidden = true;
+    el('claim-step-3').hidden = false;
+    el('claim-connected-user').textContent = `@${currentConnectedUser}`;
+  } else {
+    el('claim-step-1').hidden = false;
+    el('claim-step-2').hidden = true;
+    el('claim-step-3').hidden = true;
+    if (prefillName) el('claim-username').value = prefillName;
+  }
+}
+
+el('claim-open').addEventListener('click', () => {
+  if (el('claim-drawer').hidden) openClaimDrawer();
+  else el('claim-drawer').hidden = true;
+});
+el('claim-close').addEventListener('click', () => { el('claim-drawer').hidden = true; });
+
+el('claim-quick-btn').addEventListener('click', async () => {
+  const chosen = el('claim-quick-select').value;
+  if (!chosen) return;
+  await bindUserQuickly(chosen);
+  flyToMyOwnHouse();
+});
+
+el('claim-fly-home-btn').addEventListener('click', flyToMyOwnHouse);
+
+el('claim-req-btn').addEventListener('click', async () => {
+  const username = el('claim-username').value.trim();
+  const msg = el('claim-msg');
+  msg.hidden = true;
+  const resp = await apiFetch('/api/claim/request', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    msg.textContent = data.error || 'Hiba történt.';
+    msg.hidden = false;
+    return;
+  }
+  pendingClaimCode = data.code;
+  el('claim-target-user').textContent = `@${data.username}`;
+  el('claim-code-box').textContent = data.code;
+  el('claim-step-1').hidden = true;
+  el('claim-step-2').hidden = false;
+});
+
+el('claim-back-btn').addEventListener('click', () => {
+  el('claim-step-2').hidden = true;
+  el('claim-step-1').hidden = false;
+});
+
+el('claim-sim-btn').addEventListener('click', async () => {
+  if (!pendingClaimCode) return;
+  const resp = await apiFetch('/api/claim/simulate-dm', {
+    method: 'POST',
+    body: JSON.stringify({ code: pendingClaimCode }),
+  });
+  const data = await resp.json();
+  if (resp.ok) {
+    currentConnectedUser = data.username;
+    localStorage.setItem('kisfalu_my_user', currentConnectedUser);
+    updateClaimButtonUI();
+    updateMyHomeBeaconPosition();
+    openClaimDrawer();
+  }
+});
+
+el('claim-go-room-btn').addEventListener('click', () => {
+  if (currentConnectedUser) {
+    el('claim-drawer').hidden = true;
+    enterHouseInterior(currentConnectedUser);
+  }
+});
+
+el('claim-logout-btn').addEventListener('click', async () => {
+  await apiFetch('/api/claim/logout', { method: 'POST' });
+  currentConnectedUser = null;
+  localStorage.removeItem('kisfalu_my_user');
+  updateClaimButtonUI();
+  updateMyHomeBeaconPosition();
+  openClaimDrawer();
+});
+
+// --- 11. Kártyák, Akciók (Munka/Pihenés), Testreszabás és Napló ---
+let selectedRes = null;
+let selectedPlaceKey = null;
+let followMode = false;
+let behindMode = false;
+
+const PALETTE_ROOFS = ['#c8523b', '#d99b26', '#4a7c59', '#5b6e8c', '#8c4a6b', '#4a3b32'];
+const PALETTE_WALLS = ['#f5eedc', '#fff6e0', '#e3d5b8', '#d8e2dc', '#f4d5cc'];
+const PALETTE_CLOTH = ['#c8343a', '#29648a', '#3f7350', '#d49b27', '#7209b7', '#bc4749'];
+
+function renderSwatches(containerId, colors, currentHex, onPick) {
+  const row = el(containerId);
+  const label = row.querySelector('span');
+  row.replaceChildren(label);
+  for (const hex of colors) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `swatch ${currentHex?.toLowerCase() === hex.toLowerCase() ? 'active' : ''}`;
+    btn.style.background = hex;
+    btn.addEventListener('click', () => onPick(hex));
+    row.append(btn);
+  }
+}
+
+async function saveCustomization(res, changes) {
+  Object.assign(res, changes);
+  res.houseGroup.userData.roofMat.color.set(res.roof);
+  res.houseGroup.userData.wallMat.color.set(res.wall);
+  res.figureGroup.userData.clothMat.color.set(res.cloth);
+  openCustomizePanel(res);
+  try {
+    await apiFetch('/api/customize', {
+      method: 'POST',
+      body: JSON.stringify({ name: res.name, ...changes }),
+    });
+  } catch { /* helyi mentés */ }
+}
+
+function openCustomizePanel(res) {
+  el('custom-box').hidden = false;
+  renderSwatches('swatches-roof', PALETTE_ROOFS, res.roof, (roof) => saveCustomization(res, { roof }));
+  renderSwatches('swatches-wall', PALETTE_WALLS, res.wall, (wall) => saveCustomization(res, { wall }));
+  renderSwatches('swatches-cloth', PALETTE_CLOTH, res.cloth, (cloth) => saveCustomization(res, { cloth }));
+}
+
+function statusTextFor(res, sec) {
+  const s = whereIs(res, sec);
+  if (s.mode === 'walk') return s.targetKey ? `Épp ${PLACES[s.targetKey].to} tart` : 'Épp hazafelé sétál';
+  if (s.mode === 'esti') return 'Épp az esti falugyűlésen beszélget a Főtéren';
+  if (s.mode === 'work') return `Épp ${PLACES[s.targetKey].at} van`;
+  const hour = sec / HOUR;
+  return (hour < 6.5 || hour >= 22) ? 'Otthon alszik' : 'Otthon pihen';
+}
+
+function buildResidentDiary(res, upToSec) {
+  const events = [];
+  let prevState = null;
+  for (let s = 6 * HOUR; s <= upToSec; s += 600) {
+    const st = whereIs(res, s);
+    const key = `${st.mode}:${st.targetKey || ''}`;
+    if (key !== prevState && st.mode !== 'walk') {
+      prevState = key;
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      let label = 'Otthon van';
+      if (st.mode === 'work') label = `Megérkezett ${PLACES[st.targetKey].to}`;
+      else if (st.mode === 'esti') label = 'Csatlakozott az esti gyűléshez a Főtéren';
+      else if (s > 12 * HOUR) label = 'Hazaért a házába';
+      events.push({ time: `${hh}:${mm}`, label });
+    }
+  }
+  return events.reverse();
+}
+
+function updateCardPrivacyBadge(res) {
+  const badge = el('card-privacy-badge');
+  const priv = housePrivacyMap[res.name.toLowerCase()] || 'public';
+  const isMine = currentConnectedUser && currentConnectedUser.toLowerCase() === res.name.toLowerCase();
+  badge.hidden = false;
+  badge.textContent = `${isMine ? '🏠 Saját házam · ' : ''}${priv === 'private' ? '🔒 Zárt ház' : '🌍 Nyitott ház'}`;
+  badge.className = `badge ${priv === 'private' ? 'locked' : 'open'}`;
+}
+
+function renderActionButtonsOnCard(actionsList, titleText = '⚡ Elérhető tevékenységek (Akciók):') {
+  const boxEl = el('action-box');
+  const btnsEl = el('action-buttons');
+  const fbEl = el('action-feedback');
+  fbEl.hidden = true;
+
+  if (!actionsList || !actionsList.length) {
+    boxEl.hidden = true;
+    return;
+  }
+  boxEl.hidden = false;
+  el('action-box-title').textContent = titleText;
+  btnsEl.replaceChildren(...actionsList.map((act) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ghost primary';
+    b.textContent = act.label;
+    b.addEventListener('click', () => {
+      if (act.onClick) {
+        act.onClick();
+      } else {
+        fbEl.textContent = `✓ ${act.msg}`;
+        fbEl.hidden = false;
+      }
+    });
+    return b;
+  }));
+}
+
+function selectResident(res, fly = true) {
+  setWalker(false);
+  selectedRes = res;
+  selectedPlaceKey = null;
+  followMode = true;
+  el('card').hidden = false;
+  el('vote').hidden = true;
+  el('custom-box').hidden = true;
+
+  el('card-name').textContent = `@${res.name}`;
+  updateCardPrivacyBadge(res);
+  el('card-role').textContent = res.title;
+  el('card-story').textContent = `Beköltözött a ${res.day || 1}. napon.`;
+  el('card-people').replaceChildren();
+
+  const isMine = currentConnectedUser && currentConnectedUser.toLowerCase() === res.name.toLowerCase();
+  el('btn-enter-room').hidden = false;
+  el('btn-set-mine').hidden = isMine;
+  el('btn-follow').hidden = false;
+  el('btn-behind').hidden = false;
+  el('btn-house').hidden = false;
+  el('btn-person').hidden = true;
+  el('btn-custom').hidden = false;
+  el('diary-box').hidden = false;
+
+  renderActionButtonsOnCard([
+    { label: '🛌 Pihenés a házban (+100% Energia)', msg: `@${res.name} kipihente magát otthon!` },
+    { label: `🔨 Munkába küldés (${PLACES[res.place]?.name || 'Falu'})`, onClick: () => selectLandmark(res.place === 'szabad' ? 'tuz' : res.place) },
+  ], '⚡ Karakter akciók:');
+
+  refreshCardLive(currentSec());
+
+  const s = whereIs(res, currentSec());
+  const tx = s.mode === 'home' ? res.x : s.x;
+  const tz = s.mode === 'home' ? res.z : s.z;
+  pin.visible = true;
+  pin.position.set(tx, s.mode === 'home' ? 4.8 : 2.5, tz);
+  if (fly) flyTo(tx, tz, 30);
+}
+
+function selectHouse(res) {
+  setWalker(false);
+  setBehind(false);
+  selectedRes = res;
+  selectedPlaceKey = null;
+  followMode = false;
+  el('card').hidden = false;
+  el('vote').hidden = true;
+  el('custom-box').hidden = true;
+
+  const isMine = currentConnectedUser && currentConnectedUser.toLowerCase() === res.name.toLowerCase();
+  el('card-name').textContent = `@${res.name} háza`;
+  updateCardPrivacyBadge(res);
+  el('card-role').textContent = res.title;
+  el('card-status').textContent = statusTextFor(res, currentSec());
+  el('card-story').textContent = `Koordináták: (${res.x}, ${res.z}) · Kattints a „🚪 Belépés a házba” gombra a szoba megtekintéséhez!`;
+  el('card-people').replaceChildren();
+
+  el('btn-enter-room').hidden = false;
+  el('btn-set-mine').hidden = isMine;
+  el('btn-follow').hidden = true;
+  el('btn-behind').hidden = true;
+  el('btn-house').hidden = true;
+  el('btn-person').hidden = false;
+  el('btn-custom').hidden = false;
+  el('diary-box').hidden = true;
+
+  renderActionButtonsOnCard([
+    { label: '🛌 Pihenés / Alvás (+100% Energia)', msg: 'Kipihented magad, az energiád újra 100%!' },
+    { label: '🛋️ Szoba berendezése', onClick: () => enterHouseInterior(res.name) },
+  ], '⚡ Otthoni akciók:');
+
+  pin.visible = true;
+  pin.position.set(res.x, 4.9, res.z);
+  flyTo(res.x, res.z, 30);
+}
+
+function selectLandmark(placeKey) {
+  setWalker(false);
+  setBehind(false);
+  selectedRes = null;
+  selectedPlaceKey = placeKey;
+  followMode = false;
+
+  const p = PLACES[placeKey] || PLACES.tuz;
+  el('card').hidden = false;
+  el('vote').hidden = true;
+  el('card-privacy-badge').hidden = true;
+  el('custom-box').hidden = true;
+  el('diary-box').hidden = true;
+  el('btn-enter-room').hidden = true;
+  el('btn-set-mine').hidden = true;
+  el('btn-follow').hidden = true;
+  el('btn-behind').hidden = true;
+  el('btn-house').hidden = true;
+  el('btn-person').hidden = true;
+  el('btn-custom').hidden = true;
+
+  el('card-name').textContent = p.name;
+  el('card-role').textContent = p.since;
+  el('card-story').textContent = p.story;
+
+  renderActionButtonsOnCard(p.actions || [], '⚡ Helyszíni akciók (Munka / Kikapcsolódás):');
+
+  refreshCardLive(currentSec());
+  pin.visible = true;
+  pin.position.set(p.x, 5.2, p.z);
+  flyTo(p.x, p.z, 36);
+}
+
+function refreshCardLive(sec) {
+  if (selectedRes && !el('diary-box').hidden) {
+    el('card-status').textContent = statusTextFor(selectedRes, sec);
+    const diary = buildResidentDiary(selectedRes, sec);
+    el('diary-list').replaceChildren(...diary.map((d) => {
+      const li = document.createElement('li');
+      const t = document.createElement('time');
+      t.textContent = d.time;
+      li.append(t, d.label);
+      return li;
+    }));
+  } else if (selectedPlaceKey) {
+    const here = residents.filter((r) => {
+      const st = whereIs(r, sec);
+      return st.mode !== 'home' && st.targetKey === selectedPlaceKey;
+    });
+    el('card-status').textContent = here.length
+      ? `Most itt tartózkodik: ${here.length} lakos`
+      : 'Épp senki sincs itt.';
+    el('card-people').replaceChildren(...here.slice(0, 8).map((r) => {
+      const chip = document.createElement('button');
+      chip.className = 'chip';
+      chip.textContent = `@${r.name}`;
+      chip.addEventListener('click', () => selectResident(r));
+      return chip;
+    }));
+  }
+}
+
+function closeCard() {
+  setBehind(false);
+  selectedRes = null;
+  selectedPlaceKey = null;
+  followMode = false;
+  pin.visible = false;
+  el('card').hidden = true;
+  el('vote').hidden = false;
+}
+
+el('card-close').addEventListener('click', closeCard);
+el('btn-enter-room').addEventListener('click', () => {
+  if (selectedRes) enterHouseInterior(selectedRes.name);
+});
+el('btn-set-mine').addEventListener('click', async () => {
+  if (!selectedRes) return;
+  await bindUserQuickly(selectedRes.name);
+  selectHouse(selectedRes);
+});
+el('btn-house').addEventListener('click', () => { if (selectedRes) selectHouse(selectedRes); });
+el('btn-person').addEventListener('click', () => { if (selectedRes) selectResident(selectedRes); });
+el('btn-custom').addEventListener('click', () => {
+  if (!selectedRes) return;
+  if (el('custom-box').hidden) openCustomizePanel(selectedRes);
+  else el('custom-box').hidden = true;
+});
+el('btn-follow').addEventListener('click', () => {
+  followMode = !followMode;
+  el('btn-follow').classList.toggle('on', followMode);
+  el('btn-follow').textContent = followMode ? 'Követés aktív' : 'Kövesd';
+});
+el('event-btn').addEventListener('click', () => selectLandmark('tuz'));
+
+// --- 12. TPS "Menj vele" mód és Saját WASD Séta + Q/E kameraforgatás ---
+function setBehind(on) {
+  behindMode = on;
+  controls.enabled = !on;
+  el('btn-behind').classList.toggle('on', on);
+  el('btn-behind').textContent = on ? 'Térkép nézet' : 'Menj vele';
+  if (!on && selectedRes) {
+    const st = whereIs(selectedRes, currentSec());
+    setView(st.x, st.z, 34);
+  }
+}
+el('btn-behind').addEventListener('click', () => {
+  if (selectedRes) setBehind(!behindMode);
+});
+
+let walker = null;
+const pressedKeys = new Set();
+const playerMesh = createVillagerGroup({ name: 'Te', cloth: '#ffcf55' });
+playerMesh.visible = false;
+let dragLook = null;
+
+function setWalker(on) {
+  if (Boolean(walker) === on) return;
+  if (on) {
+    closeCard();
+    walker = { x: controls.target.x, z: controls.target.z, heading: Math.PI, step: 0 };
+    playerMesh.visible = true;
+    controls.enabled = false;
+    el('walk-hud').hidden = false;
+    el('vote').hidden = true;
+  } else {
+    setView(walker.x, walker.z, 42);
+    walker = null;
+    playerMesh.visible = false;
+    controls.enabled = true;
+    el('walk-hud').hidden = true;
+    el('vote').hidden = false;
+    pressedKeys.clear();
+  }
+}
+
+el('walk-open').addEventListener('click', () => setWalker(true));
+el('walk-exit').addEventListener('click', () => setWalker(false));
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') {
+    if (inRoomMode) exitRoomInterior();
+    else if (walker) setWalker(false);
+    else closeCard();
+    el('add-drawer').hidden = true;
+    el('chronicle-drawer').hidden = true;
+    el('claim-drawer').hidden = true;
+    el('search-dropdown').hidden = true;
+    return;
+  }
+  if (!walker && !inRoomMode) {
+    if (e.code === 'KeyQ') el('cam-rot-left').click();
+    if (e.code === 'KeyE') el('cam-rot-right').click();
+  }
+  if (walker) pressedKeys.add(e.code);
+});
+window.addEventListener('keyup', (e) => pressedKeys.delete(e.code));
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (walker) dragLook = { x: e.clientX, id: e.pointerId };
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (walker && dragLook?.id === e.pointerId) {
+    walker.heading -= (e.clientX - dragLook.x) * 0.007;
+    dragLook.x = e.clientX;
+  }
+});
+window.addEventListener('pointerup', () => { dragLook = null; });
+
+function updateWalker(dt) {
+  const has = (...codes) => codes.some((c) => pressedKeys.has(c));
+  const forward = (has('KeyW', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0);
+  const turn = (has('KeyA', 'ArrowLeft') ? 1 : 0) - (has('KeyD', 'ArrowRight') ? 1 : 0);
+  walker.heading += turn * 2.3 * dt;
+
+  const speed = (has('ShiftLeft', 'ShiftRight') ? 14 : 7.5) * forward * dt;
+  const nx = walker.x + Math.sin(walker.heading) * speed;
+  const nz = walker.z + Math.cos(walker.heading) * speed;
+
+  const inRiver = Math.abs(nz - riverZ(nx)) < RIVER_HALF_WIDTH - 0.3;
+  const onBridge = Math.abs(nx - BRIDGE.x) < 1.8;
+  if (!inRiver || onBridge) {
+    walker.x = nx;
+    walker.z = nz;
+  }
+  if (forward !== 0) walker.step += dt * 10;
+
+  playerMesh.position.set(walker.x, Math.abs(Math.sin(walker.step)) * 0.14, walker.z);
+  playerMesh.rotation.y = walker.heading;
+
+  const camX = walker.x - Math.sin(walker.heading) * 6.5;
+  const camZ = walker.z - Math.cos(walker.heading) * 6.5;
+  camera.position.lerp(new THREE.Vector3(camX, 3.3, camZ), Math.min(1, dt * 8));
+  camera.lookAt(walker.x + Math.sin(walker.heading) * 4, 1.2, walker.z + Math.cos(walker.heading) * 4);
+  controls.target.set(walker.x, 0, walker.z);
+}
+
+// --- 13. KERESŐ ÉS KATEGÓRIÁS LISTA (ABC SZERINT CSÖKKENŐEN: Z -> A) ---
+const q = el('q');
+const hits = el('hits');
+const searchDropdown = el('search-dropdown');
+let activeSearchTab = 'all'; // 'all' | 'houses' | 'players' | 'actions'
+let sortDescending = true;   // Alapértelmezett: ABC szerint csökkenő (Z -> A)
+
+function compareStr(a, b) {
+  return sortDescending
+    ? b.localeCompare(a, 'hu', { sensitivity: 'base' })
+    : a.localeCompare(b, 'hu', { sensitivity: 'base' });
+}
+
+function renderSearchList() {
+  const needle = q.value.trim().replace(/^@/, '').toLowerCase();
+  const sec = currentSec();
+  hits.replaceChildren();
+
+  const items = [];
+
+  // 1. Akciók és Menüpontok (Munka, Pihenés, Bográcsozás, Szobaberendezés stb.)
+  if (activeSearchTab === 'all' || activeSearchTab === 'actions') {
+    const matchedActions = ACTION_MENU_ITEMS
+      .filter((a) => !needle || a.title.toLowerCase().includes(needle) || a.sub.toLowerCase().includes(needle))
+      .sort((a, b) => compareStr(a.title, b.title));
+
+    for (const act of matchedActions) {
+      items.push({
+        title: `⚡ ${act.title}`,
+        sub: act.sub,
+        badge: 'Akció / Menü',
+        badgeClass: 'action',
+        onClick: () => {
+          searchDropdown.hidden = true;
+          if (act.type === 'walk') setWalker(true);
+          else if (act.type === 'my_home') flyToMyOwnHouse();
+          else if (act.type === 'my_room') {
+            if (currentConnectedUser) enterHouseInterior(currentConnectedUser);
+            else openClaimDrawer();
+          } else if (act.type === 'place') selectLandmark(act.placeKey);
+        },
+      });
+    }
+  }
+
+  // 2. Házak (ABC szerint csökkenően: Z -> A)
+  if (activeSearchTab === 'all' || activeSearchTab === 'houses') {
+    const matchedHouses = residents
+      .filter((r) => !needle || r.name.toLowerCase().includes(needle) || r.title.toLowerCase().includes(needle))
+      .sort((a, b) => compareStr(a.name, b.name));
+
+    for (const r of matchedHouses) {
+      const isMine = currentConnectedUser && currentConnectedUser.toLowerCase() === r.name.toLowerCase();
+      const priv = housePrivacyMap[r.name.toLowerCase()] === 'private' ? '🔒 Zárt' : '🌍 Nyitott';
+      items.push({
+        title: `🏡 @${r.name} háza`,
+        sub: `${priv} · Koordináta: (${r.x}, ${r.z})`,
+        badge: isMine ? '🏠 Saját házam' : 'Ház',
+        badgeClass: isMine ? 'mine' : '',
+        onClick: () => {
+          searchDropdown.hidden = true;
+          selectHouse(r);
+        },
+      });
+    }
+  }
+
+  // 3. Játékosok / Lakók (ABC szerint csökkenően: Z -> A)
+  if (activeSearchTab === 'all' || activeSearchTab === 'players') {
+    const matchedPlayers = residents
+      .filter((r) => !needle || r.name.toLowerCase().includes(needle) || r.title.toLowerCase().includes(needle))
+      .sort((a, b) => compareStr(a.name, b.name));
+
+    for (const r of matchedPlayers) {
+      const isMine = currentConnectedUser && currentConnectedUser.toLowerCase() === r.name.toLowerCase();
+      items.push({
+        title: `👤 @${r.name}`,
+        sub: `${r.title} · ${statusTextFor(r, sec)}`,
+        badge: isMine ? 'Te vagy' : 'Játékos',
+        badgeClass: isMine ? 'mine' : '',
+        onClick: () => {
+          searchDropdown.hidden = true;
+          selectResident(r);
+        },
+      });
+    }
+  }
+
+  el('search-count-label').textContent = `${items.length} találat · ABC ${sortDescending ? 'csökkenő (Z → A)' : 'növekvő (A → Z)'}`;
+
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'none';
+    li.textContent = 'Nincs találat. Kattints az „➕ Új követő” gombra új lakos felvételéhez!';
+    hits.append(li);
+    return;
+  }
+
+  for (const item of items) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+
+    const mainDiv = document.createElement('div');
+    mainDiv.className = 'item-main';
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'item-title';
+    titleSpan.textContent = item.title;
+    const subSpan = document.createElement('span');
+    subSpan.className = 'item-sub';
+    subSpan.textContent = item.sub;
+    mainDiv.append(titleSpan, subSpan);
+
+    const tagSpan = document.createElement('span');
+    tagSpan.className = `item-tag ${item.badgeClass || ''}`;
+    tagSpan.textContent = item.badge;
+
+    btn.append(mainDiv, tagSpan);
+    btn.addEventListener('click', item.onClick);
+    li.append(btn);
+    hits.append(li);
+  }
+}
+
+q.addEventListener('focus', () => {
+  searchDropdown.hidden = false;
+  renderSearchList();
+});
+q.addEventListener('input', () => {
+  searchDropdown.hidden = false;
+  renderSearchList();
+});
+el('search-toggle-btn').addEventListener('click', () => {
+  searchDropdown.hidden = !searchDropdown.hidden;
+  if (!searchDropdown.hidden) renderSearchList();
+});
+
+document.querySelectorAll('.s-tab').forEach((tabBtn) => {
+  tabBtn.addEventListener('click', () => {
+    activeSearchTab = tabBtn.dataset.tab;
+    document.querySelectorAll('.s-tab').forEach((b) => b.classList.toggle('active', b === tabBtn));
+    renderSearchList();
+  });
+});
+
+el('sort-dir-btn').addEventListener('click', () => {
+  sortDescending = !sortDescending;
+  el('sort-dir-btn').textContent = sortDescending ? 'Sorrend: Z → A ↓' : 'Sorrend: A → Z ↑';
+  el('search-toggle-btn').textContent = sortDescending ? '📋 Lista (Z–A)' : '📋 Lista (A–Z)';
+  renderSearchList();
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#search')) {
+    searchDropdown.hidden = true;
+  }
+});
+
+// Új követő felvétele
+el('add-open').addEventListener('click', () => {
+  el('chronicle-drawer').hidden = true;
+  el('claim-drawer').hidden = true;
+  el('add-drawer').hidden = !el('add-drawer').hidden;
+  if (!el('add-drawer').hidden) el('new-name').focus();
+});
+el('add-close').addEventListener('click', () => { el('add-drawer').hidden = true; });
+
+el('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  el('add-error').hidden = true;
+  const name = el('new-name').value.trim();
+  const place = el('new-place').value;
+  const title = el('new-title').value.trim();
+
+  try {
+    const resp = await apiFetch('/api/resident', {
+      method: 'POST',
+      body: JSON.stringify({ name, place, title }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      el('add-error').textContent = data.error || 'Hiba történt.';
+      el('add-error').hidden = false;
+      if (data.resident) {
+        const existing = byName.get(data.resident.name.toLowerCase());
+        if (existing) selectHouse(existing);
+      }
+      return;
+    }
+    const created = addResidentToWorld(data.resident);
+    // Automatikusan összekötjük az új lakost a böngészővel, hogy rögtön a saját háza legyen!
+    await bindUserQuickly(created.name);
+    el('add-form').reset();
+    el('add-drawer').hidden = true;
+    selectHouse(created);
+  } catch {
+    el('add-error').textContent = 'Nem sikerült elérni a helyi szervert.';
+    el('add-error').hidden = false;
+  }
+});
+
+function renderChronicle() {
+  const list = el('chronicle-list');
+  list.replaceChildren(...(villageData.chronicle || []).slice().reverse().map((entry) => {
+    const item = document.createElement('div');
+    item.className = 'chronicle-item';
+    const b = document.createElement('b');
+    b.textContent = `${entry.day}. nap – ${entry.title}`;
+    const p = document.createElement('p');
+    for (const part of entry.text.split(/(@[a-zA-Z0-9._]+)/g)) {
+      const target = part.startsWith('@') && byName.get(part.slice(1).toLowerCase());
+      if (target) {
+        const btn = document.createElement('button');
+        btn.className = 'inline-user';
+        btn.textContent = part;
+        btn.addEventListener('click', () => {
+          el('chronicle-drawer').hidden = true;
+          selectResident(target);
+        });
+        p.append(btn);
+      } else {
+        p.append(part);
+      }
+    }
+    item.append(b, p);
+    return item;
+  }));
+}
+renderChronicle();
+
+el('chronicle-open').addEventListener('click', () => {
+  el('add-drawer').hidden = true;
+  el('claim-drawer').hidden = true;
+  el('chronicle-drawer').hidden = !el('chronicle-drawer').hidden;
+});
+el('chronicle-close').addEventListener('click', () => { el('chronicle-drawer').hidden = true; });
+
+// --- 14. Kattintás a Falu Térképen, Lebegő Címkék és Képernyőszéli "Saját házam" Iránytű ---
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let pointerDownPos = null;
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (inRoomMode) return;
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+  flight = null;
+  followMode = false;
+  el('btn-follow').classList.remove('on');
+});
+
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (inRoomMode || walker || !pointerDownPos) return;
+  if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 7) return;
+
+  pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+
+  const hitList = raycaster.intersectObjects([...figurePickers, ...housePickers, ...landmarkPickers], false);
+  if (!hitList.length) return;
+  const hit = hitList[0].object;
+
+  if (hit.userData.residentFigure) selectResident(hit.userData.residentFigure);
+  else if (hit.userData.resident) selectHouse(hit.userData.resident);
+  else if (hit.userData.placeKey) selectLandmark(hit.userData.placeKey);
+});
+
+const labelsContainer = el('labels');
+const placeTags = Object.keys(PLACES).filter((k) => k !== 'tuzkor').map((key) => {
+  const tag = document.createElement('button');
+  tag.className = 'tag place';
+  tag.textContent = PLACES[key].name;
+  tag.addEventListener('click', () => selectLandmark(key));
+  labelsContainer.append(tag);
+  return { key, tag };
+});
+
+const personTagPool = Array.from({ length: 12 }, () => {
+  const tag = document.createElement('button');
+  tag.className = 'tag person';
+  tag.hidden = true;
+  tag.addEventListener('click', () => { if (tag._res) selectResident(tag._res); });
+  labelsContainer.append(tag);
+  return tag;
+});
+
+const projVec = new THREE.Vector3();
+function projectToScreen(tag, x, y, z) {
+  projVec.set(x, y, z).project(camera);
+  if (Math.abs(projVec.x) > 1 || Math.abs(projVec.y) > 1 || projVec.z > 1) {
+    tag.hidden = true;
+    return false;
+  }
+  const px = (projVec.x * 0.5 + 0.5) * window.innerWidth;
+  const py = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
+  tag.hidden = false;
+  tag.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+  return true;
+}
+
+// Saját házam címke + Képernyőszéli nyíl frissítése
+function updateMyHomePointer(t) {
+  const myTag = el('my-home-tag');
+  const compassBtn = el('home-compass-pointer');
+  if (!currentConnectedUser || inRoomMode) {
+    myTag.hidden = true;
+    compassBtn.hidden = true;
+    return;
+  }
+  const myRes = byName.get(currentConnectedUser.toLowerCase());
+  if (!myRes) {
+    myTag.hidden = true;
+    compassBtn.hidden = true;
+    return;
+  }
+
+  // 3D jelző animálása a saját ház felett
+  myHomeBeacon.children[0].position.y = 5.4 + Math.sin(t * 4.5) * 0.35;
+  myHomeBeacon.children[0].rotation.y = t * 2.0;
+
+  projVec.set(myRes.x, 6.2, myRes.z).project(camera);
+  let ndcX = projVec.x;
+  let ndcY = projVec.y;
+  if (projVec.z > 1) {
+    ndcX = -ndcX;
+    ndcY = -ndcY;
+  }
+
+  const onScreen = Math.abs(projVec.x) <= 0.94 && Math.abs(projVec.y) <= 0.88 && projVec.z <= 1;
+  if (onScreen) {
+    compassBtn.hidden = true;
+    myTag.hidden = false;
+    myTag.textContent = `🏠 Saját házam (@${myRes.name})`;
+    const px = (projVec.x * 0.5 + 0.5) * window.innerWidth;
+    const py = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
+    myTag.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+  } else {
+    // Ha a saját ház kívül van a képernyőn, a képernyő szélére tesszük az iránytű gombot!
+    myTag.hidden = true;
+    compassBtn.hidden = false;
+    const angle = Math.atan2(-ndcY, ndcX);
+    const marginX = window.innerWidth / 2 - 115;
+    const marginY = window.innerHeight / 2 - 65;
+    const edgeX = window.innerWidth / 2 + Math.cos(angle) * marginX;
+    const edgeY = window.innerHeight / 2 + Math.sin(angle) * marginY;
+    compassBtn.style.left = `${edgeX.toFixed(0)}px`;
+    compassBtn.style.top = `${edgeY.toFixed(0)}px`;
+    compassBtn.textContent = `🏠 Saját házam (@${myRes.name}) erre ➔`;
+  }
+}
+
+// --- 15. Meghívó link (#haz=nev&kulcs=xyz) felismerése induláskor ---
+function checkInviteHash() {
+  if (!window.location.hash) return;
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const haz = params.get('haz');
+  const kulcs = params.get('kulcs');
+  if (haz) {
+    enterHouseInterior(haz, kulcs);
+    history.replaceState(null, '', window.location.pathname);
+  }
+}
+checkInviteHash();
+window.addEventListener('hashchange', checkInviteHash);
+
+// --- 16. Fő Animációs Ciklus ---
+let lastTime = performance.now();
+let frameCount = 0;
+
+function tick(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+  const t = now / 1000;
+
+  if (inRoomMode) {
+    roomControls.update();
+    renderer.render(roomScene, roomCamera);
+    requestAnimationFrame(tick);
+    return;
+  }
+
+  const sec = currentSec();
+
+  if (flight) {
+    flight.t = Math.min(1, flight.t + dt / 0.75);
+    const k = flight.t * flight.t * (3 - 2 * flight.t);
+    setView(
+      flight.fromX + (flight.x - flight.fromX) * k,
+      flight.fromZ + (flight.z - flight.fromZ) * k,
+      flight.fromDist + (flight.dist - flight.fromDist) * k,
+      flight.fromAzimuth + (flight.targetAzimuth - flight.fromAzimuth) * k,
+      flight.fromPolar + (flight.targetPolar - flight.fromPolar) * k
+    );
+    if (flight.t >= 1) flight = null;
+  } else if (walker) {
+    updateWalker(dt);
+  } else if (behindMode && selectedRes) {
+    const st = whereIs(selectedRes, sec);
+    const camX = st.x - Math.sin(st.heading) * 6.0;
+    const camZ = st.z - Math.cos(st.heading) * 6.0;
+    camera.position.lerp(new THREE.Vector3(camX, 3.2, camZ), Math.min(1, dt * 6));
+    camera.lookAt(st.x, 1.3, st.z);
+    controls.target.set(st.x, 0, st.z);
+  } else {
+    controls.update();
+  }
+
+  if (windmillBlades) {
+    windmillBlades.rotation.z -= dt * 0.65;
+  }
+  const isDaytime = sec > 6.5 * HOUR && sec < 20.5 * HOUR;
+  for (const a of pastureAnimals) {
+    if (isDaytime) {
+      a.mesh.position.x = a.baseX + Math.sin(t * 0.4 + a.seed) * 1.4;
+      a.mesh.position.z = a.baseZ + Math.cos(t * 0.3 + a.seed) * 1.4;
+      a.mesh.rotation.y = Math.atan2(
+        Math.cos(t * 0.4 + a.seed) * 0.4,
+        -Math.sin(t * 0.3 + a.seed) * 0.3
+      );
+    }
+  }
+
+  updateWeather(dt);
+
+  let outsideCount = 0;
+  for (let i = 0; i < residents.length; i++) {
+    const res = residents[i];
+    const st = whereIs(res, sec);
+    const isHome = st.mode === 'home';
+    if (!isHome) outsideCount++;
+
+    res.figureGroup.visible = !isHome || res === selectedRes;
+    const onBridge = Math.abs(st.x - BRIDGE.x) < 1.9 && st.z < BRIDGE.southZ && st.z > BRIDGE.northZ;
+    const bob = st.mode === 'walk' ? Math.abs(Math.sin(t * 8.5 + i)) * 0.14 : 0;
+    res.figureGroup.position.set(st.x, (onBridge ? 0.55 : 0) + bob, st.z);
+    res.figureGroup.rotation.y = st.heading;
+  }
+
+  if (currentSeason === 'tel') {
+    if (xmasStarMesh) {
+      xmasStarMesh.rotation.y = t * 1.6;
+    }
+    flames.forEach((f, i) => {
+      f.scale.y = 0.85 + Math.sin(t * 14 + i * 2.1) * 0.25;
+    });
+    smokePuffs.forEach(({ mesh, offset }, i) => {
+      const cycle = (t * 0.35 + offset) % 1;
+      mesh.position.set(
+        PLACES.tuz.x + 1.35 + Math.sin(t * 1.5 + i) * 0.35 * cycle,
+        1.8 + cycle * 4.5,
+        PLACES.tuz.z + 0.85 + Math.cos(t * 1.2 + i) * 0.35 * cycle
+      );
+      mesh.scale.setScalar(0.6 + cycle * 1.4);
+      mesh.material.opacity = (1 - cycle) * 0.55;
+    });
+  }
+
+  updateMyHomePointer(t);
+
+  const chosenTag = el('chosen-tag');
+  if (selectedRes && !el('diary-box').hidden) {
+    const st = whereIs(selectedRes, sec);
+    const tx = st.mode === 'home' ? selectedRes.x : st.x;
+    const tz = st.mode === 'home' ? selectedRes.z : st.z;
+    const ty = st.mode === 'home' ? 4.8 : 2.3;
+    pin.position.set(tx, ty + Math.sin(t * 4) * 0.15, tz);
+    chosenTag.textContent = `@${selectedRes.name}`;
+    projectToScreen(chosenTag, tx, ty + 0.9, tz);
+    if (followMode && !flight && !behindMode) {
+      const dist = camera.position.distanceTo(controls.target);
+      setView(
+        controls.target.x + (tx - controls.target.x) * 0.08,
+        controls.target.z + (tz - controls.target.z) * 0.08,
+        dist
+      );
+    }
+  } else {
+    chosenTag.hidden = true;
+  }
+
+  for (const { key, tag } of placeTags) {
+    const p = PLACES[key];
+    projectToScreen(tag, p.x, 4.8, p.z);
+  }
+  const camDist = camera.position.distanceTo(controls.target);
+  let usedTags = 0;
+  if (camDist < 68) {
+    for (const res of residents) {
+      if (usedTags >= personTagPool.length) break;
+      if (!res.figureGroup.visible || res === selectedRes) continue;
+      const d = Math.hypot(res.figureGroup.position.x - controls.target.x, res.figureGroup.position.z - controls.target.z);
+      if (d < 34) {
+        const tag = personTagPool[usedTags];
+        tag._res = res;
+        tag.textContent = `@${res.name}`;
+        if (projectToScreen(tag, res.figureGroup.position.x, 2.2, res.figureGroup.position.z)) {
+          usedTags++;
+        }
+      }
+    }
+  }
+  for (let i = usedTags; i < personTagPool.length; i++) personTagPool[i].hidden = true;
+
+  if (frameCount % 15 === 0) {
+    updateDaylight(sec, outsideCount);
+    refreshCardLive(sec);
+  }
+  frameCount++;
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  roomCamera.aspect = window.innerWidth / window.innerHeight;
+  roomCamera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+updateDaylight(currentSec(), 0);
+requestAnimationFrame(tick);
