@@ -1311,10 +1311,11 @@
 
       <h3>🔐 Belépés meglévő házba (Becenév + Jelszó):</h3>
       <label for="claim-username">Játékbeli karakternév</label>
-      <input id="claim-username" type="text" placeholder="pl. gulyas_mester" spellcheck="false" autocomplete="off">
+      <input id="claim-username" type="text" placeholder="pl. bator_kovacs" spellcheck="false" autocomplete="off">
       <label for="claim-password">Jelszó / PIN (min. 4 karakter)</label>
       <input id="claim-password" type="password" placeholder="••••" autocomplete="off">
       <button id="claim-login-btn" class="submit-btn" type="button">🔑 Belépés a házamba</button>
+      <button id="claim-to-add-btn" class="submit-btn secondary" type="button" style="margin-top: 8px; border: 1px dashed var(--sand-accent); font-weight: 700;">🏡 Még nincs saját házad? Új telek foglalása &raquo;</button>
 
       <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(44,28,12,.15);">
         <label for="claim-quick-select">⚡ Portfólió Demó: Gyors karakterváltás (1 kattintás):</label>
@@ -1375,6 +1376,7 @@
       <input id="new-title" type="text" placeholder="pl. Főpohárnok" maxlength="36">
       <p id="add-error" style="color: var(--red); font-weight: 700;" hidden></p>
       <button id="add-submit-btn" class="submit-btn" type="submit">🏡 Telek generálása és Beköltözés!</button>
+      <button id="add-to-claim-btn" class="submit-btn secondary" type="button" style="margin-top: 8px;">🔑 Már van házad? Belépés itt</button>
     </form>
   </aside>
 
@@ -1463,6 +1465,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=20261110-3"></script>
+  <script type="module" src="./app.js?v=20261110-4"></script>
 </body>
 </html>

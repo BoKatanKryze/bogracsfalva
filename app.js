@@ -89,9 +89,10 @@ function createDefaultRpgProfileLocal() {
 
 function createStarterHouseLocal(username, index = 0, passwordHash = null) {
   const isPrivateDefault = index === 1 || index === 5;
+  const isDev = username.toLowerCase() === 'gulyas_mester';
   return {
     owner: username,
-    passwordHash,
+    passwordHash: isDev ? 'PROTECTED_DEVELOPER_RESERVED' : passwordHash,
     privacy: isPrivateDefault ? 'private' : 'public',
     inviteKey: randomInviteKey(6),
     guestList: [],
@@ -136,20 +137,40 @@ function findNextPlotLocal(houses) {
 let cachedVillageData = null;
 
 function loadLocalDb() {
+  let db = null;
   try {
     const raw = localStorage.getItem('kisfalu_static_db_v1');
-    if (raw) return JSON.parse(raw);
+    if (raw) db = JSON.parse(raw);
   } catch { /* fallback */ }
-  const db = {
-    sessions: {},
-    pendingClaims: {},
-    houses: {},
-    extraResidents: [],
-    customizations: {},
-  };
+  if (!db) {
+    db = {
+      sessions: {},
+      pendingClaims: {},
+      houses: {},
+      extraResidents: [],
+      customizations: {},
+    };
+  }
+  if (!db.sessions) db.sessions = {};
+  if (!db.houses) db.houses = {};
+
+  // Ha a korábbi verzióban be volt ragadva a gulyas_mester session, kitakarítjuk:
+  if (db.sessions[SESSION_TOKEN]?.toLowerCase() === 'gulyas_mester') {
+    delete db.sessions[SESSION_TOKEN];
+  }
+  if (db.houses['gulyas_mester']) {
+    db.houses['gulyas_mester'].passwordHash = 'PROTECTED_DEVELOPER_RESERVED';
+  }
+
   if (cachedVillageData?.residents) {
     cachedVillageData.residents.forEach((r, idx) => {
-      db.houses[r.name.toLowerCase()] = createStarterHouseLocal(r.name, idx);
+      const k = r.name.toLowerCase();
+      if (!db.houses[k]) {
+        db.houses[k] = createStarterHouseLocal(r.name, idx);
+      }
+      if (k === 'gulyas_mester') {
+        db.houses[k].passwordHash = 'PROTECTED_DEVELOPER_RESERVED';
+      }
     });
   }
   localStorage.setItem('kisfalu_static_db_v1', JSON.stringify(db));
@@ -172,7 +193,8 @@ function handleLocalApi(urlStr, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const body = options.body ? JSON.parse(options.body) : {};
   const db = loadLocalDb();
-  const currentUser = db.sessions[SESSION_TOKEN] || localStorage.getItem('kisfalu_my_user') || null;
+  const rawCurrentUser = db.sessions[SESSION_TOKEN] || localStorage.getItem('kisfalu_my_user') || null;
+  const currentUser = (rawCurrentUser && rawCurrentUser.toLowerCase() !== 'gulyas_mester') ? rawCurrentUser : null;
 
   if (u.pathname.endsWith('/api/me') && method === 'GET') {
     const privacyMap = {};
@@ -199,6 +221,9 @@ function handleLocalApi(urlStr, options = {}) {
     const password = String(body.password || '');
     if (!rawName || !password) {
       return jsonResp(400, { error: 'Add meg a játékbeli karakternévedet és a jelszavadat!' });
+    }
+    if (rawName.toLowerCase() === 'gulyas_mester') {
+      return jsonResp(403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
     }
     const allRes = cachedVillageData?.residents || [];
     const resident = allRes.find((r) => r.name.toLowerCase() === rawName.toLowerCase());
@@ -228,7 +253,7 @@ function handleLocalApi(urlStr, options = {}) {
 
   if (u.pathname.endsWith('/api/rpg/sync') && method === 'POST') {
     const targetUser = currentUser || String(body.username || '').trim();
-    if (!targetUser) return jsonResp(403, { error: 'Nincs kiválasztott karakter.' });
+    if (!targetUser || targetUser.toLowerCase() === 'gulyas_mester') return jsonResp(403, { error: 'Nincs kiválasztott karakter.' });
     const key = targetUser.toLowerCase();
     if (!db.houses[key]) db.houses[key] = createStarterHouseLocal(targetUser);
     if (body.rpg && typeof body.rpg === 'object') {
@@ -243,6 +268,9 @@ function handleLocalApi(urlStr, options = {}) {
 
   if (u.pathname.endsWith('/api/claim/request') && method === 'POST') {
     const name = String(body.username || '').trim().replace(/^@/, '');
+    if (name.toLowerCase() === 'gulyas_mester') {
+      return jsonResp(403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
+    }
     const allRes = cachedVillageData?.residents || [];
     const resident = allRes.find((r) => r.name.toLowerCase() === name.toLowerCase());
     if (!resident) {
@@ -394,6 +422,9 @@ function handleLocalApi(urlStr, options = {}) {
     const password = String(body.password || '');
     if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,28}$/.test(rawName)) {
       return jsonResp(400, { error: 'Adj meg egy érvényes játékbeli nevet (2–28 karakter)!' });
+    }
+    if (rawName.toLowerCase() === 'gulyas_mester') {
+      return jsonResp(403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
     }
     if (password && password.length < 4) {
       return jsonResp(400, { error: 'A jelszónak legalább 4 karakternek kell lennie!' });
@@ -640,7 +671,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261110-3';
+const APP_VERSION = '20261110-4';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -674,8 +705,20 @@ let playerRpg = null;
 const meResp = await apiFetch('/api/me');
 const meData = meResp.ok ? await meResp.json() : { username: null, privacyMap: {} };
 
-// Ha még nincs összekötve senkivel, megnézzük, választott-e már helyben
-let currentConnectedUser = meData.username || localStorage.getItem('kisfalu_my_user') || null;
+// Ha a korábbi verziókból a gulyas_mester session ragadt volna be a böngészőbe, kitakarítjuk:
+if (localStorage.getItem('kisfalu_my_user')?.toLowerCase() === 'gulyas_mester') {
+  localStorage.removeItem('kisfalu_my_user');
+}
+
+// Belépett felhasználó ellenőrzése (gulyas_mester a fejlesztőé, vendégeknek nem tölthető be automatikusan)
+let currentConnectedUser = (meData.username && meData.username.toLowerCase() !== 'gulyas_mester')
+  ? meData.username
+  : (localStorage.getItem('kisfalu_my_user') || null);
+
+if (currentConnectedUser && currentConnectedUser.toLowerCase() === 'gulyas_mester') {
+  currentConnectedUser = null;
+  localStorage.removeItem('kisfalu_my_user');
+}
 const housePrivacyMap = meData.privacyMap || {};
 
 el('village-title').textContent = villageData.villageName || 'Bográcsfalva';
@@ -683,6 +726,7 @@ el('vote-text').innerHTML = villageData.voteQuestion || 'Mai szavazás: <b>PÉKS
 
 // Gyors lakos-összekötő segédfüggvény (Portfólió demó módhoz)
 async function bindUserQuickly(username) {
+  if (!username || username.toLowerCase() === 'gulyas_mester') return false;
   const reqResp = await apiFetch('/api/claim/request', {
     method: 'POST',
     body: JSON.stringify({ username }),
@@ -720,6 +764,7 @@ function updateClaimButtonUI() {
     homeBtn.textContent = '🏠 Saját házam';
   }
 }
+updateClaimButtonUI();
 
 // --- 2. Three.js Renderer és Fő Jelenet ---
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -2417,8 +2462,12 @@ el('home-compass-pointer').addEventListener('click', flyToMyOwnHouse);
 
 function populateQuickSelect() {
   const sel = el('claim-quick-select');
-  const sorted = [...residents].sort((a, b) => b.name.localeCompare(a.name, 'hu'));
-  sel.replaceChildren(...sorted.map((r) => {
+  if (!sel) return;
+  const sorted = [...residents]
+    .filter((r) => r.name.toLowerCase() !== 'gulyas_mester')
+    .sort((a, b) => b.name.localeCompare(a.name, 'hu'));
+
+  const options = sorted.map((r) => {
     const opt = document.createElement('option');
     opt.value = r.name;
     opt.textContent = `@${r.name} (${r.title})`;
@@ -2426,7 +2475,15 @@ function populateQuickSelect() {
       opt.selected = true;
     }
     return opt;
-  }));
+  });
+
+  const devOpt = document.createElement('option');
+  devOpt.value = '';
+  devOpt.disabled = true;
+  devOpt.textContent = '🔒 @gulyas_mester (Fejlesztőnek lefoglalva)';
+  options.unshift(devOpt);
+
+  sel.replaceChildren(...options);
 }
 
 function openClaimDrawer(prefillName = '') {
@@ -2458,10 +2515,19 @@ el('claim-close').addEventListener('click', () => { el('claim-drawer').hidden = 
 
 el('claim-quick-btn').addEventListener('click', async () => {
   const chosen = el('claim-quick-select').value;
-  if (!chosen) return;
+  if (!chosen || chosen.toLowerCase() === 'gulyas_mester') return;
   await bindUserQuickly(chosen);
   flyToMyOwnHouse();
 });
+
+if (el('claim-to-add-btn')) {
+  el('claim-to-add-btn').addEventListener('click', () => {
+    el('claim-drawer').hidden = true;
+    updatePlotCapacityUI();
+    el('add-drawer').hidden = false;
+    el('new-name')?.focus();
+  });
+}
 
 el('claim-fly-home-btn').addEventListener('click', flyToMyOwnHouse);
 
@@ -2473,6 +2539,12 @@ async function loginWithPassword() {
 
   if (!username || !password) {
     msg.textContent = 'Add meg a játékbeli karakternévedet és a jelszavadat!';
+    msg.hidden = false;
+    return;
+  }
+
+  if (username.toLowerCase() === 'gulyas_mester') {
+    msg.textContent = '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!';
     msg.hidden = false;
     return;
   }
@@ -2500,6 +2572,14 @@ async function loginWithPassword() {
 
 if (el('claim-login-btn')) {
   el('claim-login-btn').addEventListener('click', loginWithPassword);
+}
+if (el('claim-username')) {
+  el('claim-username').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      el('claim-password')?.focus();
+    }
+  });
 }
 if (el('claim-password')) {
   el('claim-password').addEventListener('keydown', (e) => {
@@ -2737,11 +2817,9 @@ function updatePlayerStatsUI() {
 }
 updatePlayerStatsUI();
 
-// Ha legelső indításkor még nincs kiválasztott karakter, most (amikor a 3D világ, a lakók és az RPG motor már mind betöltöttek!)
-// automatikusan bekötjük az első lakost (pl. gulyas_mester), hogy a "Saját házam" rögtön működjön:
-if (!currentConnectedUser && villageData.residents.length > 0) {
-  await bindUserQuickly(villageData.residents[0].name);
-}
+// Kezdéskor nem kötjük be erőszakkal a fejlesztői karaktert (gulyas_mester) vendégként,
+// a látogató tiszta vendégként indul, és a "🔑 Belépés" vagy "🏠 Saját házam" gombbal léphet be / foglalhat telket:
+updateClaimButtonUI();
 
 let currentCardActions = [];
 
@@ -3751,6 +3829,13 @@ el('add-open').addEventListener('click', () => {
 });
 el('add-close').addEventListener('click', () => { el('add-drawer').hidden = true; });
 
+if (el('add-to-claim-btn')) {
+  el('add-to-claim-btn').addEventListener('click', () => {
+    el('add-drawer').hidden = true;
+    openClaimDrawer();
+  });
+}
+
 el('add-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   el('add-error').hidden = true;
@@ -3758,6 +3843,12 @@ el('add-form').addEventListener('submit', async (e) => {
   const password = el('new-password') ? el('new-password').value : '';
   const place = el('new-place').value;
   const title = el('new-title').value.trim();
+
+  if (name.toLowerCase() === 'gulyas_mester') {
+    el('add-error').textContent = '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva! Kérlek válassz másik nevet.';
+    el('add-error').hidden = false;
+    return;
+  }
 
   try {
     const resp = await apiFetch('/api/auth/register', {
@@ -3785,6 +3876,7 @@ el('add-form').addEventListener('submit', async (e) => {
     el('add-form').reset();
     el('add-drawer').hidden = true;
     selectHouse(created);
+    flyToMyOwnHouse();
   } catch {
     el('add-error').textContent = 'Nem sikerült elérni a helyi szervert.';
     el('add-error').hidden = false;

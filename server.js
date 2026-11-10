@@ -62,9 +62,10 @@ function createDefaultRpgProfile() {
 function createStarterHouse(username, index = 0, passwordHash = null) {
   // Néhány ház alapból zárt (például a 2. és 6. lakosé), hogy rögtön ki lehessen próbálni a zárt házakat is
   const isPrivateDefault = index === 1 || index === 5;
+  const isDev = username.toLowerCase() === 'gulyas_mester';
   return {
     owner: username,
-    passwordHash,
+    passwordHash: isDev ? 'PROTECTED_DEVELOPER_RESERVED' : passwordHash,
     privacy: isPrivateDefault ? 'private' : 'public',
     inviteKey: randomKey(6),
     guestList: [],
@@ -216,6 +217,10 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 400, { error: 'Add meg a játékbeli karakternévedet és a jelszavadat!' });
     }
 
+    if (rawName.toLowerCase() === 'gulyas_mester') {
+      return sendJson(res, 403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
+    }
+
     const village = await readVillage();
     const resident = village.residents.find((r) => r.name.toLowerCase() === rawName.toLowerCase());
     if (!resident) {
@@ -279,6 +284,9 @@ const server = http.createServer(async (req, res) => {
     if (!rawToken) return sendJson(res, 400, { error: 'Hiányzó böngésző token.' });
 
     const name = String(body.username || '').trim().replace(/^@/, '');
+    if (name.toLowerCase() === 'gulyas_mester') {
+      return sendJson(res, 403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
+    }
     const village = await readVillage();
     const resident = village.residents.find((r) => r.name.toLowerCase() === name.toLowerCase());
     if (!resident) {
@@ -506,6 +514,9 @@ const server = http.createServer(async (req, res) => {
 
       if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,28}$/.test(rawName)) {
         return sendJson(res, 400, { error: 'Adj meg egy érvényes játékbeli nevet (2–28 karakter)!' });
+      }
+      if (rawName.toLowerCase() === 'gulyas_mester') {
+        return sendJson(res, 403, { error: '🔒 @gulyas_mester a falu fejlesztői karaktere és le van foglalva!' });
       }
       if (password && password.length < 4) {
         return sendJson(res, 400, { error: 'A jelszónak legalább 4 karakternek kell lennie!' });
