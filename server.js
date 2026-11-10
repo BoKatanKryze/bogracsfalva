@@ -115,7 +115,7 @@ const STREET_PLOTS = [
   { x: 24.0, z: -32.0, rot: -0.8 },
   { x: 36.0, z: -38.0, rot: -0.8 },
   // Déli Mezei utcavég
-  { x: 0.0, z: 48.0, rot: 3.14 },
+  { x: 6.5, z: 46.0, rot: -1.57 },
 ];
 
 function findNextPlot(houses) {
