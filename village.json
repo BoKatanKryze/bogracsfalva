@@ -1,6 +1,7 @@
 {
   "villageName": "Bográcsfalva",
   "day": 5,
+  "maxHouses": 40,
   "voteQuestion": "Mai szavazás: PÉKSÉG vagy ŐRTORONY épüljön?",
   "chronicle": [
     {

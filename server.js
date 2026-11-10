@@ -32,14 +32,43 @@ function randomKey(len = 6) {
   return crypto.randomBytes(len).toString('base64url').slice(0, len);
 }
 
-function createStarterHouse(username, index = 0) {
+// GDPR-mentes (Zero-PII) jelszó hash-elés scrypt + salt segítségével
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const derived = crypto.scryptSync(String(password), salt, 32).toString('hex');
+  return `${salt}:${derived}`;
+}
+
+function verifyPassword(password, storedHash) {
+  if (!storedHash || !storedHash.includes(':')) return false;
+  const [salt, key] = storedHash.split(':');
+  const derived = crypto.scryptSync(String(password), salt, 32).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(key, 'hex'), Buffer.from(derived, 'hex'));
+}
+
+function createDefaultRpgProfile() {
+  return {
+    coins: 50,
+    energy: 100,
+    xp: 0,
+    resources: { fa: 0, liszt: 0, hal: 0, tej: 0 },
+    cooldowns: {},
+    stats: { worksDone: 0, visitedFoter: false, boughtFurniture: false, votedOption: null },
+    claimedQuests: {},
+    votes: { pekseg: 48, ortorony: 39, konyvtar: 27 },
+    lastEnergyUpdate: Date.now(),
+  };
+}
+
+function createStarterHouse(username, index = 0, passwordHash = null) {
   // Néhány ház alapból zárt (például a 2. és 6. lakosé), hogy rögtön ki lehessen próbálni a zárt házakat is
   const isPrivateDefault = index === 1 || index === 5;
   return {
     owner: username,
+    passwordHash,
     privacy: isPrivateDefault ? 'private' : 'public',
     inviteKey: randomKey(6),
     guestList: [],
+    rpg: createDefaultRpgProfile(),
     items: STARTER_CATALOG.map((item, idx) => ({
       id: `${username}_item_${idx + 1}`,
       type: item.type,
@@ -149,15 +178,97 @@ function sendJson(res, status, payload) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  // 1. Aktuális böngésző-munkamenet lekérdezése + házak nyitott/zárt állapota
+  // 1. Aktuális böngésző-munkamenet lekérdezése + házak nyitott/zárt állapota + RPG profil + telek-limit
   if (url.pathname === '/api/me' && req.method === 'GET') {
     const interiors = await readInteriors();
+    const village = await readVillage();
     const username = getSessionUser(req, interiors);
     const privacyMap = {};
     for (const [k, h] of Object.entries(interiors.houses)) {
       privacyMap[k] = h.privacy;
     }
-    sendJson(res, 200, { username, privacyMap });
+    let rpg = null;
+    if (username) {
+      const h = interiors.houses[username.toLowerCase()];
+      if (h) {
+        if (!h.rpg) h.rpg = createDefaultRpgProfile();
+        rpg = h.rpg;
+      }
+    }
+    sendJson(res, 200, {
+      username,
+      privacyMap,
+      rpg,
+      maxHouses: village.maxHouses || 40,
+      claimedCount: village.residents.length,
+    });
+    return;
+  }
+
+  // 1.5 GDPR-mentes (Zero-PII) Belépés: Becenév + Jelszó
+  if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+    const body = await parseBody(req);
+    const rawToken = req.headers['x-session-token'];
+    const rawName = String(body.username || '').trim().replace(/^@/, '');
+    const password = String(body.password || '');
+
+    if (!rawName || !password) {
+      return sendJson(res, 400, { error: 'Add meg a játékbeli karakternévedet és a jelszavadat!' });
+    }
+
+    const village = await readVillage();
+    const resident = village.residents.find((r) => r.name.toLowerCase() === rawName.toLowerCase());
+    if (!resident) {
+      return sendJson(res, 404, { error: 'Ezzel a névvel még nincs ház a faluban! Foglalj magadnak új telket.' });
+    }
+
+    const interiors = await readInteriors();
+    const key = resident.name.toLowerCase();
+    if (!interiors.houses[key]) {
+      interiors.houses[key] = createStarterHouse(resident.name);
+    }
+    const house = interiors.houses[key];
+
+    if (house.passwordHash) {
+      if (!verifyPassword(password, house.passwordHash)) {
+        return sendJson(res, 401, { error: 'Hibás jelszó ehhez a házhoz!' });
+      }
+    } else {
+      // Ha egy alap (még jelszó nélküli) falusi házba lép be először jelszóval, lefoglalja vele:
+      if (password.length < 4) {
+        return sendJson(res, 400, { error: 'A jelszónak legalább 4 karakternek kell lennie!' });
+      }
+      house.passwordHash = hashPassword(password);
+    }
+
+    if (!house.rpg) house.rpg = createDefaultRpgProfile();
+    if (rawToken) {
+      interiors.sessions[hashToken(rawToken)] = resident.name;
+    }
+    await writeInteriors(interiors);
+    sendJson(res, 200, { ok: true, username: resident.name, rpg: house.rpg });
+    return;
+  }
+
+  // 1.6 Felhasználóhoz kötött RPG profil & Cooldown mentése
+  if (url.pathname === '/api/rpg/sync' && req.method === 'POST') {
+    const body = await parseBody(req);
+    const interiors = await readInteriors();
+    const currentUser = getSessionUser(req, interiors) || String(body.username || '').trim();
+    if (!currentUser) return sendJson(res, 403, { error: 'Nincs kiválasztott karakter.' });
+
+    const key = currentUser.toLowerCase();
+    const house = interiors.houses[key];
+    if (!house) return sendJson(res, 404, { error: 'Ház nem található.' });
+
+    if (body.rpg && typeof body.rpg === 'object') {
+      house.rpg = {
+        ...(house.rpg || createDefaultRpgProfile()),
+        ...body.rpg,
+      };
+      await writeInteriors(interiors);
+    }
+    sendJson(res, 200, { ok: true, rpg: house.rpg });
     return;
   }
 
@@ -386,19 +497,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 9. Új lakos és ház hozzáadása
-  if (url.pathname === '/api/resident' && req.method === 'POST') {
+  // 9. Új lakos és procedurális ház/telek lefoglalása (GDPR-mentes: Becenév + Jelszó + maxHouses limit)
+  if ((url.pathname === '/api/resident' || url.pathname === '/api/auth/register') && req.method === 'POST') {
     try {
       const body = await parseBody(req);
-      const rawName = String(body.name || '').trim().replace(/^@/, '');
-      if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,30}$/.test(rawName)) {
-        return sendJson(res, 400, { error: 'Adj meg egy érvényes felhasználónevet (2-30 karakter)!' });
+      const rawName = String(body.username || body.name || '').trim().replace(/^@/, '');
+      const password = String(body.password || '');
+
+      if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,28}$/.test(rawName)) {
+        return sendJson(res, 400, { error: 'Adj meg egy érvényes játékbeli nevet (2–28 karakter)!' });
+      }
+      if (password && password.length < 4) {
+        return sendJson(res, 400, { error: 'A jelszónak legalább 4 karakternek kell lennie!' });
       }
 
       const data = await readVillage();
       const exists = data.residents.find((r) => r.name.toLowerCase() === rawName.toLowerCase());
       if (exists) {
-        return sendJson(res, 409, { error: 'Ezzel a névvel már lakik valaki a faluban!', resident: exists });
+        return sendJson(res, 409, {
+          error: 'Ezzel a névvel már áll egy ház a faluban! Lépj be a jelszavaddal a „🔑 Belépés / Saját házam” menüben!',
+          resident: exists,
+        });
+      }
+
+      const maxHouses = data.maxHouses || 40;
+      if (data.residents.length >= maxHouses) {
+        return sendJson(res, 403, {
+          error: `🔒 Bográcsfalva megtelt (${maxHouses}/${maxHouses} telek)! Új ház már nem építhető, de a meglévő lakók beléphetnek.`,
+          full: true,
+          maxHouses,
+          claimedCount: data.residents.length,
+        });
       }
 
       const plot = findNextPlot(data.residents);
@@ -433,10 +562,23 @@ const server = http.createServer(async (req, res) => {
       await writeVillage(data);
 
       const interiors = await readInteriors();
-      interiors.houses[rawName.toLowerCase()] = createStarterHouse(rawName);
+      const pwHash = password ? hashPassword(password) : null;
+      const newHouse = createStarterHouse(rawName, data.residents.length - 1, pwHash);
+      interiors.houses[rawName.toLowerCase()] = newHouse;
+
+      const rawToken = req.headers['x-session-token'];
+      if (rawToken) {
+        interiors.sessions[hashToken(rawToken)] = rawName;
+      }
       await writeInteriors(interiors);
 
-      sendJson(res, 201, { ok: true, resident: newResident });
+      sendJson(res, 201, {
+        ok: true,
+        resident: newResident,
+        rpg: newHouse.rpg,
+        maxHouses,
+        claimedCount: data.residents.length,
+      });
     } catch {
       sendJson(res, 500, { error: 'Szerverhiba történt.' });
     }
