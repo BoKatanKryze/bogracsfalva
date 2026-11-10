@@ -710,10 +710,340 @@
       background: #fff;
     }
 
-    @media (max-width: 650px) {
-      #left { width: 215px; }
-      #brand b { font-size: 16px; }
-      #cam-widget { bottom: 90px; }
+    /* Összecsukható fejléc gombok & Globális Menü Elrejtés (Zen mód) */
+    .brand-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .collapse-toggle {
+      border: 0;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font: 700 11.5px Georgia, serif;
+      padding: 4px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: none;
+    }
+    .collapse-toggle:hover { background: #e6d2aa; }
+
+    #zen-toggle-btn {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 7;
+      min-height: 36px;
+      padding: 0 14px;
+      border: 2px solid var(--paper);
+      border-radius: 20px;
+      background: rgba(44,28,12,.88);
+      color: var(--paper);
+      font: 700 12.5px Georgia, serif;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #zen-toggle-btn.zen-active {
+      background: #ff5a36;
+      color: #fff;
+    }
+    body.zen-mode #top,
+    body.zen-mode #vote,
+    body.zen-mode #cam-widget {
+      display: none !important;
+    }
+
+    /* Játékos Státusz Sáv (Tallér, Energia, Szint, Nyersanyagok) */
+    #player-stats-bar {
+      width: 100%;
+      background: rgba(44,28,12,.9);
+      color: var(--paper);
+      border-radius: 12px;
+      padding: 8px 11px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+      pointer-events: auto;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .stats-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .stat-pill {
+      background: rgba(255,248,234,.15);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .stat-pill.gold-txt { color: var(--gold); }
+    .energy-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .energy-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,.18);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #stat-energy-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ffcf55, #52b788);
+      transition: width .25s ease;
+    }
+    .res-chips-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-size: 11.5px;
+      color: #e6d8be;
+    }
+
+    /* Tevékenységek / Falusi Menü (Munka, Pihenés, Bolt, Küldetések) */
+    .act-tabs {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin: 8px 0 10px;
+      border-bottom: 1px solid rgba(44,28,12,.15);
+      padding-bottom: 8px;
+    }
+    .act-tab {
+      flex: 1;
+      min-height: 34px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--paper-hover);
+      color: var(--ink);
+      font: 700 12px Georgia, serif;
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .act-tab.active {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .menu-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .menu-item-card {
+      background: #fff;
+      border: 1.5px solid #e2d4b7;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .menu-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .menu-item-info b {
+      display: block;
+      font-size: 13.5px;
+      color: var(--ink);
+    }
+    .menu-item-info span {
+      display: block;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .menu-item-info .reward-tag {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green);
+      background: #e3f0e2;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+    .menu-act-btn {
+      min-height: 36px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--gold);
+      color: var(--ink);
+      font: 700 12.5px Georgia, serif;
+      cursor: pointer;
+      flex: none;
+      white-space: nowrap;
+    }
+    .menu-act-btn:hover { background: var(--gold-hover); }
+    .menu-act-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    #work-progress-box {
+      margin: 8px 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #fff3cd;
+      border: 1.5px solid #d99b26;
+      font-size: 12.5px;
+    }
+    .work-bar-track {
+      height: 10px;
+      background: rgba(44,28,12,.15);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    #work-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--green);
+      transition: width .1s linear;
+    }
+    #menu-toast {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #d1e7dd;
+      color: #0f5132;
+      font-weight: 700;
+      font-size: 12.5px;
+    }
+
+    /* Mobil érintőgombok Sétáló (WASD) módhoz */
+    #walk-touch-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin: 8px 0 10px;
+    }
+    .dpad-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+    .dpad-btn {
+      width: 52px;
+      height: 44px;
+      border: 0;
+      border-radius: 10px;
+      background: rgba(255,248,234,.22);
+      color: #fff;
+      font: 700 16px Georgia, serif;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .dpad-btn:active, .dpad-btn.pressed {
+      background: var(--gold);
+      color: var(--ink);
+    }
+
+    /* --- MOBIL OPTIMALIZÁCIÓ (Telefonok és Tabletek) --- */
+    @media (max-width: 768px) {
+      #top {
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #left {
+        width: 100%;
+        gap: 6px;
+      }
+      #brand {
+        padding: 8px 12px;
+      }
+      #brand b {
+        font-size: 16.5px;
+      }
+      .btn-row {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 3px;
+        scrollbar-width: none;
+      }
+      .btn-row::-webkit-scrollbar { display: none; }
+      .pill-btn {
+        min-height: 36px;
+        padding: 0 10px;
+        font-size: 12px;
+        flex: none;
+      }
+      #search {
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+      }
+      #q, #search-toggle-btn {
+        height: 40px;
+        font-size: 13px;
+      }
+      #vote {
+        left: 8px;
+        bottom: 54px;
+        max-width: 215px;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      #cam-widget {
+        right: 8px;
+        bottom: 54px;
+        padding: 6px 8px;
+      }
+      #cam-hint { display: none; }
+      #zen-toggle-btn {
+        bottom: max(10px, env(safe-area-inset-bottom));
+        font-size: 12px;
+        min-height: 34px;
+      }
+      #card {
+        left: 8px;
+        right: 8px;
+        bottom: max(8px, env(safe-area-inset-bottom));
+        max-height: 58vh;
+        padding: 14px 38px 14px 14px;
+      }
+      .drawer {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 82vh;
+        border-radius: 20px 20px 0 0;
+        padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+      }
+      #room-hud {
+        padding: 8px;
+      }
+      #room-editor {
+        max-height: 46vh;
+        padding: 10px 12px;
+      }
+      #walk-hud {
+        left: 8px;
+        right: 8px;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        max-width: none;
+      }
     }
   </style>
   <script type="importmap">
@@ -734,12 +1064,23 @@
   <!-- Képernyőszéli iránytű-mutató, ha a saját házad kívül esik a képernyőn -->
   <button id="home-compass-pointer" type="button" hidden>🏠 Saját házam erre ➔</button>
 
+  <!-- Globális Menü Elrejtés / Megjelenítés gomb (Tiszta 3D nézethez és mobilhoz) -->
+  <button id="zen-toggle-btn" type="button" title="Menük elrejtése vagy megjelenítése (H billentyű)">👁️ Menük elrejtése</button>
+
   <div id="top">
     <div id="left">
       <div id="brand">
-        <b id="village-title">Bográcsfalva</b>
-        <span id="resident-count">Betöltés…</span>
-        <span id="clock-text">12:00</span>
+        <div class="brand-header-row">
+          <div>
+            <b id="village-title">Bográcsfalva</b>
+            <span id="resident-count">Betöltés…</span>
+            <span id="clock-text">12:00</span>
+          </div>
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">
+            <button id="brand-toggle-btn" class="collapse-toggle" type="button" title="Idő és évszak beállítások lenyitása/elrejtése">⚙️ Idő/Táj ▾</button>
+            <button id="pills-toggle-btn" class="collapse-toggle" type="button" title="Menügombok elrejtése/megjelenítése">☰ Menü ▾</button>
+          </div>
+        </div>
         <div id="time-box">
           <div class="row">
             <span>Napszak: <b id="time-mode-label">Élő idő</b></span>
@@ -770,9 +1111,27 @@
           </div>
         </div>
       </div>
-      <div class="btn-row">
+
+      <!-- Élő Játékos Státusz Sáv (Tallér, Energia, Szint, Nyersanyagok) -->
+      <div id="player-stats-bar">
+        <div class="stats-top-row">
+          <span class="stat-pill gold-txt" id="stat-coins">💰 120 Tallér</span>
+          <span class="stat-pill" id="stat-level">⭐ 1. szint (Polgár)</span>
+          <button id="activities-open-top" class="mini-btn" type="button" style="background: var(--gold); color: var(--ink);">🎒 Tevékenységek</button>
+        </div>
+        <div class="energy-bar-wrap">
+          <span id="stat-energy-text" style="font-weight: 700; min-width: 82px;">⚡ 100% Energia</span>
+          <div class="energy-track"><div id="stat-energy-fill"></div></div>
+        </div>
+        <div class="res-chips-row" id="stat-resources">
+          <span>🪵 Fa: 2</span> · <span>🌾 Liszt: 1</span> · <span>🐟 Hal: 0</span> · <span>🥛 Tej: 1</span>
+        </div>
+      </div>
+
+      <div id="main-btn-row" class="btn-row">
         <button id="my-house-btn" class="pill-btn home-btn" type="button">🏠 Saját házam</button>
-        <button id="claim-open" class="pill-btn gold" type="button">📱 Fiók / DM</button>
+        <button id="activities-open" class="pill-btn gold" type="button">🎒 Falusi Menü & Munka</button>
+        <button id="claim-open" class="pill-btn" type="button">📱 Fiók / DM</button>
         <button id="add-open" class="pill-btn" type="button">➕ Új követő</button>
         <button id="chronicle-open" class="pill-btn" type="button">📜 Krónika</button>
         <button id="walk-open" class="pill-btn" type="button">🚶 Sétálj</button>
@@ -802,22 +1161,34 @@
   </div>
 
   <div id="vote">
-    <button id="event-btn" type="button">🏛️ Ma este 20:00-kor falugyűlés a Főtéren</button>
-    <div id="vote-text">Mai szavazás: <b>PÉKSÉG</b> vagy <b>ŐRTORONY</b>?</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+      <button id="event-btn" type="button" style="margin: 0; border: 0; padding: 0;">🏛️ Ma este 20:00-kor falugyűlés a Főtéren</button>
+      <button id="vote-collapse-btn" class="mini-btn" type="button" title="Szavazás doboz összecsukása">▾</button>
+    </div>
+    <div id="vote-body" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,248,234,.25);">
+      <div id="vote-text">Mai szavazás: <b>PÉKSÉG</b> vagy <b>ŐRTORONY</b>?</div>
+      <button id="vote-open-menu-btn" class="mini-btn" type="button" style="margin-top: 6px; width: 100%; background: var(--gold); color: var(--ink);">🗳️ Szavazok a Falugyűlésen!</button>
+    </div>
   </div>
 
-  <!-- Jobb alsó 3D Kamera és Forgatás vezérlő -->
+  <!-- Jobb alsó 3D Kamera és Forgatás vezérlő (Összecsukható) -->
   <div id="cam-widget">
-    <div class="cam-row">
-      <button id="cam-rot-left" class="cam-btn" type="button" title="Forgatás balra (Q)">⟲ Balra</button>
-      <button id="cam-tilt-btn" class="cam-btn" type="button" title="Döntési szög váltása">📐 Szög</button>
-      <button id="cam-reset-north" class="cam-btn" type="button" title="Északi irány visszaállítása">🧭 Észak</button>
-      <button id="cam-rot-right" class="cam-btn" type="button" title="Forgatás jobbra (E)">Jobbra ⟳</button>
+    <div class="cam-row" style="justify-content: space-between;">
+      <span style="font-weight: 700;">🎥 3D Kamera</span>
+      <button id="cam-collapse-btn" class="mini-btn" type="button">▾ Elrejt</button>
     </div>
-    <div class="cam-row">
-      <button id="cam-left-mode" class="cam-btn" type="button" style="width: 100%;">✋ Bal egér: Mozgatás (Jobb egér: 3D Forgatás)</button>
+    <div id="cam-widget-body" style="display: flex; flex-direction: column; gap: 6px;">
+      <div class="cam-row">
+        <button id="cam-rot-left" class="cam-btn" type="button" title="Forgatás balra (Q)">⟲ Balra</button>
+        <button id="cam-tilt-btn" class="cam-btn" type="button" title="Döntési szög váltása">📐 Szög</button>
+        <button id="cam-reset-north" class="cam-btn" type="button" title="Északi irány visszaállítása">🧭 Észak</button>
+        <button id="cam-rot-right" class="cam-btn" type="button" title="Forgatás jobbra (E)">Jobbra ⟳</button>
+      </div>
+      <div class="cam-row">
+        <button id="cam-left-mode" class="cam-btn" type="button" style="width: 100%;">✋ 1 ujj / Bal egér: Mozgatás</button>
+      </div>
+      <div id="cam-hint">Tipp: 2 ujjal vagy jobb egérrel (Q/E) szabadon forgathatod 3D-ben!</div>
     </div>
-    <div id="cam-hint">Tipp: Jobb egérgombbal (vagy Q/E billentyűvel) szabadon forgathatod 3D-ben!</div>
   </div>
 
   <!-- Lakos / Ház / Helyszín / Akció Kártya -->
@@ -832,7 +1203,7 @@
     <p class="story" id="card-story"></p>
     <div id="card-people" class="chips"></div>
 
-    <!-- Jövőbeli Akciók doboz (Munka, Pihenés, Étkezés stb.) -->
+    <!-- Interaktív Akciók doboz (Munka, Pihenés, Étkezés stb.) -->
     <div id="action-box" hidden>
       <h3 id="action-box-title">⚡ Elérhető tevékenységek ezen a helyszínen:</h3>
       <div id="action-buttons" class="actions" style="margin-top: 4px;"></div>
@@ -862,13 +1233,36 @@
     </div>
   </section>
 
+  <!-- 0. ÚJ: Interaktív Falusi Tevékenységek & Menü (Munka, Pihenés, Bútorbolt, Szavazás & Küldetések) -->
+  <aside id="activities-drawer" class="drawer" hidden>
+    <button id="activities-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>🎒 Falusi Élet & Menü</h2>
+    <p style="margin-bottom: 6px;">Vállalj munkát Tallérért és nyersanyagokért, töltődj fel a Főtéren vagy otthon, vásárolj új 3D bútorokat a szobádba, és szavazz a falu jövőjéről!</p>
+
+    <div class="act-tabs">
+      <button class="act-tab active" data-acttab="work" type="button">🔨 Munka</button>
+      <button class="act-tab" data-acttab="rest" type="button">🍲 Pihenés</button>
+      <button class="act-tab" data-acttab="shop" type="button">🛋️ Bútorbolt</button>
+      <button class="act-tab" data-acttab="community" type="button">🏛️ Küldetés & Szavazás</button>
+    </div>
+
+    <div id="work-progress-box" hidden>
+      <b id="work-progress-title">🔨 Munka folyamatban…</b>
+      <div class="work-bar-track"><div id="work-bar-fill"></div></div>
+    </div>
+
+    <div id="menu-toast" hidden></div>
+
+    <div id="activities-content" class="menu-card-list"></div>
+  </aside>
+
   <!-- 1. Instagram / TikTok DM Fiók-összekötő Panel -->
   <aside id="claim-drawer" class="drawer" hidden>
     <button id="claim-close" class="close-x" aria-label="Bezárás">×</button>
     <h2>Saját házam & DM Kód</h2>
     <div id="claim-step-1">
       <p>Válaszd ki a lakosodat (vagy írd be a neved), hogy a <b>🏠 Saját házam</b> mutató mindig a te házadra mutasson, és be tudd rendezni a szobádat!</p>
-      <label for="claim-quick-select">⚡ Gyors lakos-kiválasztás (1 kattintásos localhost teszt):</label>
+      <label for="claim-quick-select">⚡ Gyors lakos-kiválasztás (1 kattintásos teszt):</label>
       <select id="claim-quick-select"></select>
       <button id="claim-quick-btn" class="submit-btn" type="button">🏠 Legyen ő a saját karakterem és mutasd a házam!</button>
 
@@ -881,7 +1275,7 @@
     <div id="claim-step-2" hidden>
       <p>Küldd el ezt a kódot Instagram/TikTok üzenetben a <b id="claim-target-user"></b> fiókodról:</p>
       <div id="claim-code-box" class="code-display"></div>
-      <p style="font-size: 12.5px;"><i>Localhost teszt: az alábbi gombbal szimulálhatod, hogy a bot megkapta a DM üzenetedet:</i></p>
+      <p style="font-size: 12.5px;"><i>Teszt mód: az alábbi gombbal szimulálhatod, hogy a bot megkapta a DM üzenetedet:</i></p>
       <button id="claim-sim-btn" class="submit-btn" type="button">⚡ DM üzenet megérkezésének szimulálása</button>
       <button id="claim-back-btn" class="submit-btn secondary" type="button">Vissza</button>
     </div>
@@ -901,7 +1295,7 @@
   <aside id="add-drawer" class="drawer" hidden>
     <button id="add-close" class="close-x" aria-label="Bezárás">×</button>
     <h2>Új követő beköltöztetése</h2>
-    <p>Írj be egy Instagram/TikTok-nevet! A szerver automatikusan keres neki egy szabad telket, felépíti a házát, és ad neki kezdő bútorokat.</p>
+    <p>Írj be egy Instagram/TikTok-nevet! A rendszer automatikusan keres neki egy szabad telket, felépíti a házát, és ad neki kezdő bútorokat.</p>
     <form id="add-form">
       <label for="new-name">Felhasználónév</label>
       <input id="new-name" type="text" placeholder="pl. kovacs_bence" required maxlength="28">
@@ -931,9 +1325,20 @@
     <div id="chronicle-list"></div>
   </aside>
 
-  <!-- 4. Sétáló mód HUD -->
+  <!-- 4. Sétáló mód HUD (Asztali WASD + Mobil érintőpad vezérlés) -->
   <div id="walk-hud" hidden>
-    <p><b>W, S / Nyilak:</b> előre, hátra<br><b>A, D:</b> fordulás · <b>Shift:</b> futás<br>Egérrel húzva is körbenézhetsz.</p>
+    <p style="margin-bottom: 4px;"><b>🚶 Séta mód:</b> W/A/S/D vagy érintőgombok · Húzd a képernyőt a körbenézéshez!</p>
+    <div id="walk-touch-controls">
+      <div class="dpad-row">
+        <button class="dpad-btn" data-key="KeyW" type="button">⬆️</button>
+        <button class="dpad-btn" data-key="ShiftLeft" type="button" title="Sprint / Futás">🏃</button>
+      </div>
+      <div class="dpad-row">
+        <button class="dpad-btn" data-key="KeyA" type="button">⬅️</button>
+        <button class="dpad-btn" data-key="KeyS" type="button">⬇️</button>
+        <button class="dpad-btn" data-key="KeyD" type="button">➡️</button>
+      </div>
+    </div>
     <button id="walk-exit" type="button">Vissza a felülnézeti térképre</button>
   </div>
 
@@ -945,49 +1350,54 @@
           <span id="room-title">@lakos szobája</span>
           <span id="room-badge" class="badge"></span>
         </h2>
-        <p id="room-subtitle">Forgasd a kamerát egérrel! A tulajdonos átrendezheti a bútorokat.</p>
+        <p id="room-subtitle">Forgasd a kamerát egérrel vagy érintéssel! A tulajdonos átrendezheti a bútorokat.</p>
       </div>
       <button id="room-exit-btn" class="pill-btn gold" type="button">⬅️ Kilépés a faluba</button>
     </div>
 
     <div id="room-editor" hidden>
-      <h3>🛋️ Raktárad és Szobaberendező (Kattints a lerakáshoz, majd húzd a padlón a 3D szobában!)</h3>
-      <div id="room-inventory" class="inv-bar"></div>
-
-      <div class="room-controls-row">
-        <button id="room-rotate-btn" class="ghost" type="button">🔄 Kijelölt bútor forgatása (90°)</button>
-        <button id="room-remove-btn" class="ghost" type="button">📦 Elrakás a raktárba</button>
-        <button id="room-privacy-btn" class="ghost" type="button">🌍 Ház: Nyitott</button>
-        <button id="room-invite-toggle" class="ghost" type="button">🔑 Meghívó link & Vendéglista</button>
-        <button id="room-gift-toggle" class="ghost" type="button">🎁 Ajándékozás</button>
-        <button id="room-save-btn" class="ghost primary" type="button">💾 Berendezés mentése</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <h3 style="margin: 0;">🛋️ Raktárad és Szobaberendező</h3>
+        <button id="room-editor-collapse" class="collapse-toggle" type="button">▾ Raktár elrejtése</button>
       </div>
+      <div id="room-editor-body">
+        <div id="room-inventory" class="inv-bar"></div>
 
-      <div id="room-invite-panel" class="room-subpanel" hidden>
-        <b>🔑 Meghívó link zárt házhoz („Kulcs a lábtörlő alatt”):</b>
-        <p style="margin: 3px 0;">Aki erre a linkre rákattint, annak a böngészője elmenti a kulcsot, és bejelentkezés nélkül is bejöhet hozzád:</p>
-        <div class="row">
-          <input id="room-invite-input" type="text" readonly style="flex: 1; min-width: 210px;">
-          <button id="room-copy-invite" class="ghost primary" type="button">Másolás</button>
-          <button id="room-rekey-btn" class="ghost" type="button" title="Érvényteleníti a régi linkeket">🔄 Zárcsere</button>
+        <div class="room-controls-row">
+          <button id="room-rotate-btn" class="ghost" type="button">🔄 Forgatás (90°)</button>
+          <button id="room-remove-btn" class="ghost" type="button">📦 Elrakás</button>
+          <button id="room-privacy-btn" class="ghost" type="button">🌍 Ház: Nyitott</button>
+          <button id="room-invite-toggle" class="ghost" type="button">🔑 Meghívó & Vendégek</button>
+          <button id="room-gift-toggle" class="ghost" type="button">🎁 Ajándékozás</button>
+          <button id="room-save-btn" class="ghost primary" type="button">💾 Mentés</button>
         </div>
-        <div class="row" style="margin-top: 8px;">
-          <b>👥 Vendéglista (@név alapján):</b>
-          <input id="room-guest-input" type="text" placeholder="pl. csapos_bela" style="width: 150px;">
-          <button id="room-guest-add" class="ghost" type="button">Hozzáadás</button>
-          <span id="room-guest-tags" style="display: flex; gap: 4px; flex-wrap: wrap;"></span>
-        </div>
-      </div>
 
-      <div id="room-gift-panel" class="room-subpanel" hidden>
-        <b>🎁 Bútor ajándékozása másik lakosnak:</b>
-        <p style="margin: 3px 0;">A kiválasztott bútor átkerül a címzett szobájába egy becsomagolt ajándékdobozban!</p>
-        <div class="row">
-          <select id="gift-item-select"></select>
-          <input id="gift-target-input" type="text" placeholder="Címzett @neve (pl. csapos_bela)">
-          <button id="gift-send-btn" class="ghost primary" type="button">🎁 Ajándék elküldése</button>
+        <div id="room-invite-panel" class="room-subpanel" hidden>
+          <b>🔑 Meghívó link zárt házhoz („Kulcs a lábtörlő alatt”):</b>
+          <p style="margin: 3px 0;">Aki erre a linkre rákattint, annak a böngészője elmenti a kulcsot, és bejelentkezés nélkül is bejöhet hozzád:</p>
+          <div class="row">
+            <input id="room-invite-input" type="text" readonly style="flex: 1; min-width: 210px;">
+            <button id="room-copy-invite" class="ghost primary" type="button">Másolás</button>
+            <button id="room-rekey-btn" class="ghost" type="button" title="Érvényteleníti a régi linkeket">🔄 Zárcsere</button>
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <b>👥 Vendéglista (@név alapján):</b>
+            <input id="room-guest-input" type="text" placeholder="pl. csapos_bela" style="width: 150px;">
+            <button id="room-guest-add" class="ghost" type="button">Hozzáadás</button>
+            <span id="room-guest-tags" style="display: flex; gap: 4px; flex-wrap: wrap;"></span>
+          </div>
         </div>
-        <p id="gift-status-msg" style="margin: 4px 0 0; font-weight: 700;" hidden></p>
+
+        <div id="room-gift-panel" class="room-subpanel" hidden>
+          <b>🎁 Bútor ajándékozása másik lakosnak:</b>
+          <p style="margin: 3px 0;">A kiválasztott bútor átkerül a címzett szobájába egy becsomagolt ajándékdobozban!</p>
+          <div class="row">
+            <select id="gift-item-select"></select>
+            <input id="gift-target-input" type="text" placeholder="Címzett @neve (pl. csapos_bela)">
+            <button id="gift-send-btn" class="ghost primary" type="button">🎁 Ajándék elküldése</button>
+          </div>
+          <p id="gift-status-msg" style="margin: 4px 0 0; font-weight: 700;" hidden></p>
+        </div>
       </div>
     </div>
   </div>

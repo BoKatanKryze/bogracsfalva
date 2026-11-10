@@ -359,6 +359,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 8.5 Új bútor vásárlása / barkácsolása a saját ház raktárába
+  if (url.pathname === '/api/house/add-item' && req.method === 'POST') {
+    const body = await parseBody(req);
+    const interiors = await readInteriors();
+    const currentUser = getSessionUser(req, interiors);
+    if (!currentUser) return sendJson(res, 403, { error: 'Vásárláshoz válaszd ki a karaktered!' });
+
+    const myHouse = interiors.houses[currentUser.toLowerCase()];
+    if (!myHouse) return sendJson(res, 404, { error: 'Ház nem található.' });
+
+    const newItem = {
+      id: `${currentUser.toLowerCase()}_shop_${Date.now()}`,
+      type: String(body.type || 'bogracs_disz'),
+      label: String(body.label || '🍲 Dísztárgy'),
+      placed: true,
+      x: Math.round(((Math.random() - 0.5) * 2.2) * 4) / 4,
+      z: Math.round(((Math.random() - 0.5) * 2.2) * 4) / 4,
+      rot: 0,
+      giftFrom: null,
+      unboxed: true,
+    };
+    myHouse.items.push(newItem);
+    await writeInteriors(interiors);
+    sendJson(res, 200, { ok: true, item: newItem, items: myHouse.items });
+    return;
+  }
+
   // 9. Új lakos és ház hozzáadása
   if (url.pathname === '/api/resident' && req.method === 'POST') {
     try {

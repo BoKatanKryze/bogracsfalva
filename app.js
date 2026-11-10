@@ -271,6 +271,26 @@ function handleLocalApi(urlStr, options = {}) {
     return jsonResp(200, { ok: true, items: myHouse.items, giftedTo: targetHouse.owner });
   }
 
+  if (u.pathname.endsWith('/api/house/add-item') && method === 'POST') {
+    if (!currentUser) return jsonResp(403, { error: 'Vásárláshoz válaszd ki a karaktered!' });
+    const myHouse = db.houses[currentUser.toLowerCase()];
+    if (!myHouse) return jsonResp(404, { error: 'Ház nem található.' });
+    const newItem = {
+      id: `${currentUser.toLowerCase()}_shop_${Date.now()}`,
+      type: String(body.type || 'bogracs_disz'),
+      label: String(body.label || '🍲 Dísztárgy'),
+      placed: true,
+      x: Math.round(((Math.random() - 0.5) * 2.2) * 4) / 4,
+      z: Math.round(((Math.random() - 0.5) * 2.2) * 4) / 4,
+      rot: 0,
+      giftFrom: null,
+      unboxed: true,
+    };
+    myHouse.items.push(newItem);
+    saveLocalDb(db);
+    return jsonResp(200, { ok: true, item: newItem, items: myHouse.items });
+  }
+
   if (u.pathname.endsWith('/api/resident') && method === 'POST') {
     const rawName = String(body.name || '').trim().replace(/^@/, '');
     if (!rawName || !/^[a-zA-Z0-9._huőúöüóéáűíŐÚÖÜÓÉÁŰÍ-]{2,30}$/.test(rawName)) {
@@ -368,9 +388,10 @@ const PLACES = {
     at: 'a főtéren', to: 'a főtérre',
     story: 'A falu macskaköves főtere, ahol minden este 20:00-kor összegyűlik a falu apraja-nagyja. Tavasztól őszig díszkút áll a közepén, télen (havas tájon) pedig itt lobog a tábortűz és itt ragyog a falu karácsonyfája!',
     actions: [
-      { label: '🏛️ Korzózás és Beszélgetés a Főtéren (+Morál)', msg: 'Körbesétáltál a Főtéren és beszélgettél a falubeliekkel!' },
-      { label: '🍲 Bográcsozás / Forró ital (+50% Energia)', msg: 'Ettél egy tál forró ételt a Főtéren, az energiád feltöltődött! (+50% Energia)' },
+      { label: '🏛️ Korzózás és Beszélgetés (+15 XP, +10% Energia)', deltaEnergy: 10, deltaXp: 15, msg: 'Körbesétáltál a Főtéren és beszélgettél a falubeliekkel! (+15 XP, +10% Energia)' },
+      { label: '🍲 Bográcsozás / Forró ital (-10 Tallér → +50% Energia)', costCoins: 10, deltaEnergy: 50, deltaXp: 10, msg: 'Ettél egy tál forró ételt a Főtéren, az energiád feltöltődött! (+50% Energia)' },
       { label: '🎄 Váltás Téli Főtérre (Tábortűz + Karácsonyfa)', onClick: () => applySeason('tel') },
+      { label: '🗳️ Falugyűlés & Szavazás megnyitása', onClick: () => openActivitiesDrawer('community') },
     ],
   },
   tuzkor: {
@@ -388,8 +409,8 @@ const PLACES = {
     at: 'a kocsmánál', to: 'a kocsmához',
     story: 'A falu 84-12-re a kocsmát szavazta meg a könyvtár helyett. A hordók mindig tele vannak.',
     actions: [
-      { label: '🍺 Pihenés és Beszélgetés (+Morál)', msg: 'Koccintottál a lakókkal, és meghallgattad a legújabb falusi pletykákat!' },
-      { label: '🔨 Munka: Csapos műszak (+20 Tallér)', msg: 'Beálltál a pult mögé segíteni @csapos_bela mellé! (+20 Tallér)' },
+      { label: '🍺 Koccintás és Pihenés (-6 Tallér → +25% Energia, +12 XP)', costCoins: 6, deltaEnergy: 25, deltaXp: 12, msg: 'Koccintottál a lakókkal, és meghallgattad a legújabb falusi pletykákat! (+25% Energia)' },
+      { label: '🔨 Munka: Csapos műszak (-20% Energia → +35 Tallér)', costEnergy: 20, deltaCoins: 35, deltaXp: 15, msg: 'Beálltál a pult mögé segíteni @csapos_bela mellé! (+35 Tallér, +15 XP)' },
     ],
   },
   vadaszhaz: {
@@ -399,8 +420,8 @@ const PLACES = {
     at: 'a vadászháznál', to: 'a vadászházhoz',
     story: 'Az északi folyóparton, a sűrű erdő szélén áll. Innen indulnak a vadászok és a favágók.',
     actions: [
-      { label: '🪓 Munka: Favágás az erdőben (+25 Fa)', msg: 'Kivágtál és felaprítottál egy rakás tűzifát a falunak! (+25 Fa)' },
-      { label: '🏹 Munka: Vadászat (+30 Tallér)', msg: 'Sikeresen visszatértél az erdei portyáról! (+30 Tallér)' },
+      { label: '🪓 Munka: Favágás (-20% Energia → +3 Fa, +25 Tallér)', costEnergy: 20, deltaCoins: 25, deltaXp: 15, deltaRes: { fa: 3 }, msg: 'Kivágtál és felaprítottál egy rakás tűzifát! (+3 🪵 Fa, +25 Tallér)' },
+      { label: '🏹 Munka: Vadászat (-25% Energia → +40 Tallér, +20 XP)', costEnergy: 25, deltaCoins: 40, deltaXp: 20, msg: 'Sikeresen visszatértél az erdei portyáról! (+40 Tallér, +20 XP)' },
     ],
   },
   piac: {
@@ -410,8 +431,9 @@ const PLACES = {
     at: 'a piacon', to: 'a piacra',
     story: 'Friss sajt, lángos, méz és gyógynövények kaphatók a színes ponyvás standoknál.',
     actions: [
-      { label: '🧀 Munka: Árusítás a standnál (+25 Tallér)', msg: 'Eladtad a friss portékát a piacon! (+25 Tallér)' },
-      { label: '🥨 Lángos vásárlása (+Energia)', msg: 'Friss fokhagymás-tejfölös lángost ettél @langos_laci standjánál!' },
+      { label: '🧀 Munka: Árusítás a standnál (-15% Energia → +30 Tallér)', costEnergy: 15, deltaCoins: 30, deltaXp: 14, msg: 'Eladtad a friss portékát a piacon! (+30 Tallér, +14 XP)' },
+      { label: '🥨 Lángos vásárlása (-8 Tallér → +40% Energia)', costCoins: 8, deltaEnergy: 40, deltaXp: 8, msg: 'Friss fokhagymás-tejfölös lángost ettél @langos_laci standjánál! (+40% Energia)' },
+      { label: '🛋️ Bútorbolt & Barkácsműhely megnyitása', onClick: () => openActivitiesDrawer('shop') },
     ],
   },
   steg: {
@@ -421,8 +443,8 @@ const PLACES = {
     at: 'a stégen', to: 'a stégre',
     story: 'A folyó legmélyebb kanyarja fölé nyúlik be. A horgászok szerint kapitális harcsák laknak odalent.',
     actions: [
-      { label: '🎣 Horgászat indítása', msg: 'Bedobtad a csalit a folyóba… és kifogtál egy szép pontyot!' },
-      { label: '🌊 Pihenés a vízparton', msg: 'Leültél a stég szélére, és hallgatod a folyó csobogását.' },
+      { label: '🎣 Munka: Horgászat (-10% Energia → +2 Hal, +18 Tallér)', costEnergy: 10, deltaCoins: 18, deltaXp: 12, deltaRes: { hal: 2 }, msg: 'Bedobtad a csalit a folyóba… és kifogtál két szép pontyot! (+2 🐟 Hal, +18 Tallér)' },
+      { label: '🌊 Pihenés a vízparton (+15% Energia)', deltaEnergy: 15, deltaXp: 5, msg: 'Leültél a stég szélére, és hallgatod a folyó csobogását. (+15% Energia)' },
     ],
   },
   hid: {
@@ -432,7 +454,7 @@ const PLACES = {
     at: 'a hídnál', to: 'a hídhoz',
     story: 'Az egyetlen száraz átkelő a folyó déli és északi partja között.',
     actions: [
-      { label: '🛡️ Hídőrség (+15 Tallér)', msg: 'Ellenőrizted a hídon átkelő szekereket és vándorokat!' },
+      { label: '🛡️ Munka: Hídőrség (-10% Energia → +20 Tallér)', costEnergy: 10, deltaCoins: 20, deltaXp: 10, msg: 'Ellenőrizted a hídon átkelő szekereket és vándorokat! (+20 Tallér)' },
     ],
   },
   malom: {
@@ -442,7 +464,7 @@ const PLACES = {
     at: 'a szélmalomnál', to: 'a szélmalomhoz',
     story: 'A vitorlák éjjel-nappal forognak, itt őrlik a falu lisztjét a lángoshoz és a kenyérhez.',
     actions: [
-      { label: '🌾 Munka: Búzaőrlés (+20 Liszt)', msg: 'Felöntötted a garatra a búzát, friss liszt készült a falunak!' },
+      { label: '🌾 Munka: Búzaőrlés (-15% Energia → +3 Liszt, +22 Tallér)', costEnergy: 15, deltaCoins: 22, deltaXp: 14, deltaRes: { liszt: 3 }, msg: 'Felöntötted a garatra a búzát, friss liszt készült a falunak! (+3 🌾 Liszt, +22 Tallér)' },
     ],
   },
   legelo: {
@@ -452,7 +474,7 @@ const PLACES = {
     at: 'a legelőn', to: 'a legelőre',
     story: 'Bekerített zöld legelő itatóval, ahol a falu tehenei és bárányai békésen legelésznek.',
     actions: [
-      { label: '🐄 Munka: Állatok etetése és fejés (+20 Tej)', msg: 'Megtöltötted a vályút friss vízzel, és megfejted a teheneket!' },
+      { label: '🐄 Munka: Állatgondozás & Fejés (-15% Energia → +3 Tej, +22 Tallér)', costEnergy: 15, deltaCoins: 22, deltaXp: 14, deltaRes: { tej: 3 }, msg: 'Megtöltötted a vályút friss vízzel, és megfejted a teheneket! (+3 🥛 Tej, +22 Tallér)' },
     ],
   },
   gemeskut: {
@@ -462,24 +484,27 @@ const PLACES = {
     at: 'a gémeskútnál', to: 'a gémeskúthoz',
     story: 'Hűvös vizet ad a bográcsba és a megfáradt vándoroknak.',
     actions: [
-      { label: '🪣 Vízhúzás a kútból (+Frissülés)', msg: 'Húztál egy vödör jéghideg kútvizet!' },
+      { label: '🪣 Vízhúzás a kútból (+15% Energia, Ingyenes)', deltaEnergy: 15, deltaXp: 5, msg: 'Húztál egy vödör jéghideg kútvizet és felfrissültél! (+15% Energia)' },
     ],
   },
 };
 const WORK_PLACES = ['tuz', 'kocsma', 'vadaszhaz', 'piac', 'steg', 'malom', 'legelo', 'gemeskut'];
 
-// Keresőben megjelenő Menüpontok és Akciók listája (Munka, Pihenés, Szoba stb.)
+// Keresőben megjelenő Menüpontok és Akciók listája (Munka, Pihenés, Bolt, Küldetések, Szoba stb.)
 const ACTION_MENU_ITEMS = [
-  { id: 'act_walk', title: 'Vándorlás és Séta (WASD mód)', sub: 'Szabad séta saját karakterrel a faluban', type: 'walk' },
+  { id: 'act_menu_hub', title: 'Falusi Élet & Tevékenységek Központ (Főmenü)', sub: 'Munka, Pihenés, Bútorbolt, Barkácsolás és Napi Küldetések', type: 'act_tab', tab: 'work' },
+  { id: 'act_shop', title: 'Bútorbolt és Barkácsműhely (Új 3D bútorok)', sub: 'Vásárolj vagy barkácsolj lámpát, könyvespolcot, növényt a szobádba', type: 'act_tab', tab: 'shop' },
+  { id: 'act_quests', title: 'Napi Küldetések és Falugyűlés Szavazás', sub: 'Szavazz a falu következő épületére és szerezz jutalom Tallért', type: 'act_tab', tab: 'community' },
+  { id: 'act_walk', title: 'Vándorlás és Séta (WASD + Mobil érintőpad mód)', sub: 'Szabad séta saját karakterrel a faluban', type: 'walk' },
   { id: 'act_fire', title: 'Főtér: Falugyűlés, Korzózás és Téli Karácsonyfa', sub: 'A falu központi főtere (télen tábortűzzel és karácsonyfával)', type: 'place', placeKey: 'tuz' },
   { id: 'act_room', title: 'Szobaberendezés és Ajándékozás', sub: 'Bútorok lerakása, zárt ház meghívólink, ajándék', type: 'my_room' },
-  { id: 'act_rest', title: 'Pihenés és Alvás (Saját ház)', sub: 'Hazatérés a saját házadhoz és pihenés', type: 'my_home' },
-  { id: 'act_hunt', title: 'Munka: Vadászat és Favágás', sub: 'Vadászház az északi erdőszélen', type: 'place', placeKey: 'vadaszhaz' },
-  { id: 'act_mill', title: 'Munka: Lisztőrlés a Szélmalomban', sub: 'Dombvidéki szélmalom', type: 'place', placeKey: 'malom' },
-  { id: 'act_market', title: 'Munka: Kereskedés a Piacon', sub: 'Árusítás és vásárlás a falusi piacon', type: 'place', placeKey: 'piac' },
-  { id: 'act_pasture', title: 'Munka: Állatgondozás a Legelőn', sub: 'Tehenek és bárányok ellátása', type: 'place', placeKey: 'legelo' },
-  { id: 'act_pub', title: 'Kikapcsolódás és Munka a Kocsmában', sub: 'Italok, pletykák és csapos műszak', type: 'place', placeKey: 'kocsma' },
-  { id: 'act_fish', title: 'Horgászat és Pihenés a Stégen', sub: 'Pecázás a folyóparton', type: 'place', placeKey: 'steg' },
+  { id: 'act_rest', title: 'Pihenés és Alvás (Saját ház – +100% Energia)', sub: 'Hazatérés a saját házadhoz és teljes energiafeltöltés', type: 'act_tab', tab: 'rest' },
+  { id: 'act_hunt', title: 'Munka: Vadászat és Favágás (+Fa, +Tallér)', sub: 'Vadászház az északi erdőszélen', type: 'place', placeKey: 'vadaszhaz' },
+  { id: 'act_mill', title: 'Munka: Lisztőrlés a Szélmalomban (+Liszt, +Tallér)', sub: 'Dombvidéki szélmalom', type: 'place', placeKey: 'malom' },
+  { id: 'act_market', title: 'Munka: Kereskedés a Piacon (+Tallér, Nyersanyag eladás)', sub: 'Árusítás és vásárlás a falusi piacon', type: 'place', placeKey: 'piac' },
+  { id: 'act_pasture', title: 'Munka: Állatgondozás a Legelőn (+Tej, +Tallér)', sub: 'Tehenek és bárányok ellátása', type: 'place', placeKey: 'legelo' },
+  { id: 'act_pub', title: 'Kikapcsolódás és Munka a Kocsmában (+Tallér / +Energia)', sub: 'Italok, pletykák és csapos műszak', type: 'place', placeKey: 'kocsma' },
+  { id: 'act_fish', title: 'Horgászat és Pihenés a Stégen (+Hal, +Tallér)', sub: 'Pecázás a folyóparton', type: 'place', placeKey: 'steg' },
 ];
 
 function hash(text, seed = 0) {
@@ -1651,11 +1676,13 @@ el('cam-left-mode').addEventListener('click', () => {
   leftMouseRotates = !leftMouseRotates;
   controls.mouseButtons.LEFT = leftMouseRotates ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   controls.mouseButtons.RIGHT = leftMouseRotates ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  controls.touches.ONE = leftMouseRotates ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN;
+  controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
   const btn = el('cam-left-mode');
   btn.classList.toggle('active', leftMouseRotates);
   btn.textContent = leftMouseRotates
-    ? '🔄 Bal egér: 3D Forgatás (Jobb egér: Mozgatás)'
-    : '✋ Bal egér: Mozgatás (Jobb egér: 3D Forgatás)';
+    ? '🔄 1 ujj / Bal egér: 3D Forgatás'
+    : '✋ 1 ujj / Bal egér: Mozgatás';
 });
 
 const pin = cone(0.65, 1.5, 0xffcf55, 0, 5, 0, 6);
@@ -1841,6 +1868,28 @@ function build3DFurnitureModel(item) {
         g.add(box(1.1, 0.65, 0.7, 0x6b4423, 0, 0.32, 0));
         g.add(box(1.14, 0.12, 0.74, 0xd99b26, 0, 0.45, 0));
         break;
+      case 'lampa':
+        g.add(cyl(0.32, 0.36, 0.08, 0x3b2a1a, 0, 0.04, 0, 10));
+        g.add(cyl(0.06, 0.06, 1.55, 0x4a3520, 0, 0.8, 0, 8));
+        g.add(cone(0.42, 0.45, 0xffe066, 0, 1.65, 0, 10));
+        break;
+      case 'konyvespolc':
+        g.add(box(1.4, 1.85, 0.48, 0x6b4423, 0, 0.92, 0));
+        g.add(box(1.26, 0.42, 0.38, 0xc8343a, -0.1, 0.52, 0.06));
+        g.add(box(1.18, 0.42, 0.38, 0x29648a, 0.05, 1.05, 0.06));
+        g.add(box(1.22, 0.38, 0.38, 0x3f7350, -0.05, 1.55, 0.06));
+        break;
+      case 'noveny':
+        g.add(cyl(0.34, 0.26, 0.5, 0xb5552e, 0, 0.25, 0, 8));
+        g.add(cone(0.55, 0.95, 0x3f7350, 0, 0.85, 0, 7));
+        g.add(cone(0.42, 0.75, 0x52b788, 0, 1.3, 0, 7));
+        break;
+      case 'mini_fenyo':
+        g.add(cyl(0.2, 0.24, 0.35, 0x74482a, 0, 0.18, 0, 8));
+        g.add(cone(0.68, 0.9, 0x225c36, 0, 0.7, 0, 8));
+        g.add(cone(0.5, 0.75, 0x2a6f42, 0, 1.2, 0, 8));
+        g.add(cone(0.2, 0.25, 0xffe066, 0, 1.68, 0, 5));
+        break;
       default:
         g.add(cyl(0.5, 0.32, 0.65, 0xffcf55, 0, 0.35, 0, 10));
         break;
@@ -1982,10 +2031,12 @@ async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
   el('top').hidden = true;
   el('vote').hidden = true;
   el('cam-widget').hidden = true;
+  el('zen-toggle-btn').hidden = true;
   el('home-compass-pointer').hidden = true;
   el('card').hidden = true;
   el('labels').hidden = true;
   el('claim-drawer').hidden = true;
+  el('activities-drawer').hidden = true;
   el('room-hud').hidden = false;
   el('room-title').textContent = `🏠 @${data.owner} szobája`;
 
@@ -2007,6 +2058,7 @@ function exitRoomInterior() {
   controls.enabled = true;
 
   el('room-hud').hidden = true;
+  el('zen-toggle-btn').hidden = false;
   el('top').hidden = false;
   el('vote').hidden = false;
   el('cam-widget').hidden = false;
@@ -2210,6 +2262,7 @@ function populateQuickSelect() {
 function openClaimDrawer(prefillName = '') {
   el('add-drawer').hidden = true;
   el('chronicle-drawer').hidden = true;
+  el('activities-drawer').hidden = true;
   el('claim-drawer').hidden = false;
   el('claim-msg').hidden = true;
   populateQuickSelect();
@@ -2383,6 +2436,90 @@ function updateCardPrivacyBadge(res) {
   badge.className = `badge ${priv === 'private' ? 'locked' : 'open'}`;
 }
 
+// --- 11.2 JÁTÉKOS RPG GAZDASÁG & INTERAKTÍV FALUSI MENÜ IMPLEMENTÁCIÓ ---
+function loadPlayerRpg() {
+  try {
+    const raw = localStorage.getItem('kisfalu_player_rpg_v1');
+    if (raw) return JSON.parse(raw);
+  } catch { /* fallback */ }
+  return {
+    coins: 120,
+    energy: 100,
+    xp: 0,
+    resources: { fa: 2, liszt: 1, hal: 0, tej: 1 },
+    stats: { worksDone: 0, visitedFoter: false, boughtFurniture: false, votedOption: null },
+    claimedQuests: {},
+    votes: { pekseg: 48, ortorony: 39, konyvtar: 27 },
+  };
+}
+const playerRpg = loadPlayerRpg();
+
+function savePlayerRpg() {
+  localStorage.setItem('kisfalu_player_rpg_v1', JSON.stringify(playerRpg));
+  updatePlayerStatsUI();
+}
+
+const LEVEL_TITLES = ['Beköltöző', 'Falusi Polgár', 'Mesterember', 'Tanácsnok', 'Falubíró', 'Főispán'];
+function getPlayerLevelInfo() {
+  const lvl = Math.floor((playerRpg.xp || 0) / 50) + 1;
+  const title = LEVEL_TITLES[Math.min(lvl - 1, LEVEL_TITLES.length - 1)];
+  return { lvl, title };
+}
+
+function updatePlayerStatsUI() {
+  const { lvl, title } = getPlayerLevelInfo();
+  el('stat-coins').textContent = `💰 ${playerRpg.coins} Tallér`;
+  el('stat-level').textContent = `⭐ ${lvl}. szint (${title})`;
+  el('stat-energy-text').textContent = `⚡ ${playerRpg.energy}% Energia`;
+  el('stat-energy-fill').style.width = `${Math.max(0, Math.min(100, playerRpg.energy))}%`;
+  const r = playerRpg.resources;
+  el('stat-resources').innerHTML = `<span>🪵 Fa: <b>${r.fa}</b></span> · <span>🌾 Liszt: <b>${r.liszt}</b></span> · <span>🐟 Hal: <b>${r.hal}</b></span> · <span>🥛 Tej: <b>${r.tej}</b></span>`;
+}
+updatePlayerStatsUI();
+
+function executeGameAction(act, feedbackEl = null) {
+  if (act.onClick) {
+    act.onClick();
+    return;
+  }
+  const costCoins = act.costCoins || 0;
+  const costEnergy = act.costEnergy || 0;
+  if (playerRpg.coins < costCoins) {
+    if (feedbackEl) {
+      feedbackEl.style.color = 'var(--red)';
+      feedbackEl.textContent = `⚠️ Nincs elég Tallérod (${costCoins} Tallér szükséges)! Vállalj munkát!`;
+      feedbackEl.hidden = false;
+    }
+    return;
+  }
+  if (playerRpg.energy < costEnergy) {
+    if (feedbackEl) {
+      feedbackEl.style.color = 'var(--red)';
+      feedbackEl.textContent = `⚠️ Túl fáradt vagy (${costEnergy}% Energia szükséges)! Pihenj otthon vagy egyél a Főtéren!`;
+      feedbackEl.hidden = false;
+    }
+    return;
+  }
+
+  playerRpg.coins = Math.max(0, playerRpg.coins - costCoins + (act.deltaCoins || 0));
+  playerRpg.energy = Math.max(0, Math.min(100, playerRpg.energy - costEnergy + (act.deltaEnergy || 0)));
+  playerRpg.xp = (playerRpg.xp || 0) + (act.deltaXp || 0);
+  if (costEnergy > 0) playerRpg.stats.worksDone = (playerRpg.stats.worksDone || 0) + 1;
+
+  if (act.deltaRes) {
+    for (const [rk, rv] of Object.entries(act.deltaRes)) {
+      playerRpg.resources[rk] = (playerRpg.resources[rk] || 0) + rv;
+    }
+  }
+  savePlayerRpg();
+
+  if (feedbackEl) {
+    feedbackEl.style.color = 'var(--green)';
+    feedbackEl.textContent = `✓ ${act.msg}`;
+    feedbackEl.hidden = false;
+  }
+}
+
 function renderActionButtonsOnCard(actionsList, titleText = '⚡ Elérhető tevékenységek (Akciók):') {
   const boxEl = el('action-box');
   const btnsEl = el('action-buttons');
@@ -2400,17 +2537,333 @@ function renderActionButtonsOnCard(actionsList, titleText = '⚡ Elérhető tev�
     b.type = 'button';
     b.className = 'ghost primary';
     b.textContent = act.label;
-    b.addEventListener('click', () => {
-      if (act.onClick) {
-        act.onClick();
-      } else {
-        fbEl.textContent = `✓ ${act.msg}`;
-        fbEl.hidden = false;
-      }
-    });
+    b.addEventListener('click', () => executeGameAction(act, fbEl));
     return b;
   }));
 }
+
+let activeMenuTab = 'work';
+let workTimer = null;
+
+function showMenuToast(msg, isError = false) {
+  const tEl = el('menu-toast');
+  tEl.hidden = false;
+  tEl.style.background = isError ? '#f8d7da' : '#d1e7dd';
+  tEl.style.color = isError ? '#842029' : '#0f5132';
+  tEl.textContent = msg;
+}
+
+const WORK_JOBS = [
+  { id: 'job_wood', title: '🪓 Favágás a Vadászháznál', desc: 'Kivágod és felaprítod a tűzifát az északi erdőszélen.', placeKey: 'vadaszhaz', costEnergy: 20, rewardCoins: 25, rewardXp: 15, rewardRes: { fa: 3 }, rewardLabel: '+25 Tallér, +3 🪵 Fa, +15 XP' },
+  { id: 'job_mill', title: '🌾 Búzaőrlés a Szélmalomban', desc: 'Megőrlöd a friss búzát a dombtetőn álló malomban.', placeKey: 'malom', costEnergy: 15, rewardCoins: 22, rewardXp: 14, rewardRes: { liszt: 3 }, rewardLabel: '+22 Tallér, +3 🌾 Liszt, +14 XP' },
+  { id: 'job_fish', title: '🎣 Horgászat a Folyóparti Stégen', desc: 'Kapitális pontyokra és harcsákra pecázol a folyón.', placeKey: 'steg', costEnergy: 10, rewardCoins: 18, rewardXp: 12, rewardRes: { hal: 2 }, rewardLabel: '+18 Tallér, +2 🐟 Hal, +12 XP' },
+  { id: 'job_milk', title: '🐄 Állatgondozás és Fejés a Legelőn', desc: 'Ellátod a falu teheneit és bárányait a bekerített legelőn.', placeKey: 'legelo', costEnergy: 15, rewardCoins: 22, rewardXp: 14, rewardRes: { tej: 3 }, rewardLabel: '+22 Tallér, +3 🥛 Tej, +14 XP' },
+  { id: 'job_pub', title: '🍺 Csapos műszak a Kocsmában', desc: 'Besegítesz a pult mögött a szomjas falubelieknek.', placeKey: 'kocsma', costEnergy: 20, rewardCoins: 35, rewardXp: 16, rewardRes: {}, rewardLabel: '+35 Tallér, +16 XP' },
+];
+
+const REST_OPTIONS = [
+  { id: 'rest_home', title: '🛌 Alvás a Saját Házadban', desc: 'Hazatérsz a saját ágyadba és teljesen kipihened magad.', costCoins: 0, deltaEnergy: 100, deltaXp: 5, badge: 'Ingyenes → 100% Energia', goHome: true },
+  { id: 'rest_bogracs', title: '🍲 Bográcsgulyás a Főtéren', desc: 'Egy tál tüzes falusi bográcsgulyás a Főtéren.', placeKey: 'tuz', costCoins: 10, deltaEnergy: 55, deltaXp: 12, badge: '-10 Tallér → +55% Energia, +12 XP' },
+  { id: 'rest_langos', title: '🥨 Fokhagymás-tejfölös Lángos a Piacon', desc: 'Frissen sült piaci lángos @langos_laci standjáról.', placeKey: 'piac', costCoins: 8, deltaEnergy: 40, deltaXp: 8, badge: '-8 Tallér → +40% Energia, +8 XP' },
+  { id: 'rest_well', title: '🪣 Jéghideg Kútvíz a Gémeskútnál', desc: 'Húzol egy vödör frissítő kútvizet.', placeKey: 'gemeskut', costCoins: 0, deltaEnergy: 20, deltaXp: 4, badge: 'Ingyenes → +20% Energia' },
+];
+
+const SHOP_ITEMS = [
+  { type: 'lampa', label: '🕯️ Kovácsoltvas Állólámpa', desc: 'Meleg fényű 3D állólámpa a szobádba.', costCoins: 40, costWood: 0 },
+  { type: 'konyvespolc', label: '📚 Tölgyfa Könyvespolc', desc: 'Tömör tölgyfából ácsolt könyvespolc színes kötetekkel.', costCoins: 45, costWood: 2 },
+  { type: 'noveny', label: '🪴 Dézsás Szobanövény', desc: 'Dús zöld falusi dézsás növény a szoba sarkába.', costCoins: 35, costWood: 0 },
+  { type: 'mini_fenyo', label: '🎄 Ünnepi Szobai Karácsonyfa', desc: 'Feldíszített fenyőfa arany csúcsdísszel a házadba.', costCoins: 55, costWood: 2 },
+  { type: 'kandallo', label: '🔥 Épített Kő Kandalló', desc: 'Lobogó tűzzel fűtött kő kandalló a szobád falához.', costCoins: 65, costWood: 3 },
+  { type: 'bogracs_disz', label: '🍲 Arany Bogrács Vándorkupa', desc: 'A falu legfényesebb dísztárgya az asztalra vagy a földre.', costCoins: 85, costWood: 0 },
+];
+
+const DAILY_QUESTS = [
+  { id: 'q_work2', title: '🔨 Dolgos kezek: Végezz el 2 munkát a faluban!', rewardCoins: 45, check: () => (playerRpg.stats.worksDone || 0) >= 2, progressText: () => `${Math.min(2, playerRpg.stats.worksDone || 0)} / 2 munka kész` },
+  { id: 'q_foter', title: '🏛️ Közösségi élet: Látogass el a Főtérre!', rewardCoins: 30, check: () => Boolean(playerRpg.stats.visitedFoter), progressText: () => playerRpg.stats.visitedFoter ? 'Teljesítve ✓' : 'Kattints a Főtérre!' },
+  { id: 'q_vote', title: '🗳️ Demokratikus falu: Adj le szavazatot a Falugyűlésen!', rewardCoins: 35, check: () => Boolean(playerRpg.stats.votedOption), progressText: () => playerRpg.stats.votedOption ? 'Szavaztál ✓' : 'Válassz épületet lent!' },
+  { id: 'q_shop', title: '🛋️ Otthonépítő: Vásárolj vagy barkácsolj 1 bútort a Bútorboltban!', rewardCoins: 50, check: () => Boolean(playerRpg.stats.boughtFurniture), progressText: () => playerRpg.stats.boughtFurniture ? 'Teljesítve ✓' : '0 / 1 bútor' },
+];
+
+function startInteractiveJob(job) {
+  if (workTimer) return;
+  if (playerRpg.energy < job.costEnergy) {
+    showMenuToast(`⚠️ Nincs elég energiád (${job.costEnergy}% szükséges)! Válts a „🍲 Pihenés” fülre!`, true);
+    return;
+  }
+  const p = PLACES[job.placeKey];
+  if (p) flyTo(p.x, p.z, 32);
+
+  const progBox = el('work-progress-box');
+  const progFill = el('work-bar-fill');
+  el('work-progress-title').textContent = `${job.title} folyamatban…`;
+  progBox.hidden = false;
+  progFill.style.width = '0%';
+  el('menu-toast').hidden = true;
+
+  let step = 0;
+  workTimer = setInterval(() => {
+    step += 10;
+    progFill.style.width = `${step}%`;
+    if (step >= 100) {
+      clearInterval(workTimer);
+      workTimer = null;
+      progBox.hidden = true;
+      playerRpg.energy = Math.max(0, playerRpg.energy - job.costEnergy);
+      playerRpg.coins += job.rewardCoins;
+      playerRpg.xp += job.rewardXp;
+      playerRpg.stats.worksDone = (playerRpg.stats.worksDone || 0) + 1;
+      for (const [rk, rv] of Object.entries(job.rewardRes || {})) {
+        playerRpg.resources[rk] = (playerRpg.resources[rk] || 0) + rv;
+      }
+      savePlayerRpg();
+      showMenuToast(`✓ Sikeres munka: ${job.title}! Jutalom: ${job.rewardLabel}`);
+      renderActivitiesContent();
+    }
+  }, 150);
+}
+
+function renderActivitiesContent() {
+  const container = el('activities-content');
+  container.replaceChildren();
+
+  if (activeMenuTab === 'work') {
+    // 1. Nyersanyag-eladás a Piacon kártya
+    const r = playerRpg.resources;
+    const totalResCount = (r.fa || 0) + (r.liszt || 0) + (r.hal || 0) + (r.tej || 0);
+    const sellValue = (r.fa || 0) * 6 + (r.liszt || 0) * 7 + (r.hal || 0) * 9 + (r.tej || 0) * 7;
+
+    const sellCard = document.createElement('div');
+    sellCard.className = 'menu-item-card';
+    sellCard.style.background = '#fff8ea';
+    sellCard.innerHTML = `
+      <div class="menu-item-info">
+        <b>⚖️ Nyersanyagok eladása a Falusi Piacon</b>
+        <span>Raktárad: 🪵 ${r.fa} Fa · 🌾 ${r.liszt} Liszt · 🐟 ${r.hal} Hal · 🥛 ${r.tej} Tej</span>
+        <span class="reward-tag">Piaci érték: +${sellValue} Tallér</span>
+      </div>
+    `;
+    const sellBtn = document.createElement('button');
+    sellBtn.type = 'button';
+    sellBtn.className = 'menu-act-btn';
+    sellBtn.disabled = totalResCount === 0;
+    sellBtn.textContent = totalResCount ? `💰 Eladás (+${sellValue})` : 'Üres a raktár';
+    sellBtn.addEventListener('click', () => {
+      playerRpg.coins += sellValue;
+      playerRpg.xp += 10;
+      playerRpg.resources = { fa: 0, liszt: 0, hal: 0, tej: 0 };
+      savePlayerRpg();
+      flyTo(PLACES.piac.x, PLACES.piac.z, 32);
+      showMenuToast(`✓ Eladtad a nyersanyagokat a Piacon +${sellValue} Tallérért!`);
+      renderActivitiesContent();
+    });
+    sellCard.append(sellBtn);
+    container.append(sellCard);
+
+    for (const job of WORK_JOBS) {
+      const card = document.createElement('div');
+      card.className = 'menu-item-card';
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <b>${job.title}</b>
+          <span>${job.desc} (Energiaigény: -${job.costEnergy}%)</span>
+          <span class="reward-tag">${job.rewardLabel}</span>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.textContent = '🔨 Munka indítása';
+      btn.addEventListener('click', () => startInteractiveJob(job));
+      card.append(btn);
+      container.append(card);
+    }
+    return;
+  }
+
+  if (activeMenuTab === 'rest') {
+    for (const ro of REST_OPTIONS) {
+      const card = document.createElement('div');
+      card.className = 'menu-item-card';
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <b>${ro.title}</b>
+          <span>${ro.desc}</span>
+          <span class="reward-tag">${ro.badge}</span>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.textContent = ro.costCoins ? `🍲 Fogyasztás (${ro.costCoins} T)` : '🛌 Pihenés';
+      btn.addEventListener('click', () => {
+        if (playerRpg.coins < ro.costCoins) {
+          showMenuToast(`⚠️ Nincs elég Tallérod (${ro.costCoins} Tallér szükséges)!`, true);
+          return;
+        }
+        playerRpg.coins -= ro.costCoins;
+        playerRpg.energy = Math.min(100, playerRpg.energy + ro.deltaEnergy);
+        playerRpg.xp += ro.deltaXp;
+        savePlayerRpg();
+        if (ro.goHome) flyToMyOwnHouse();
+        else if (ro.placeKey && PLACES[ro.placeKey]) flyTo(PLACES[ro.placeKey].x, PLACES[ro.placeKey].z, 32);
+        showMenuToast(`✓ Feltöltődtél: ${ro.title}! Energiád most ${playerRpg.energy}%.`);
+        renderActivitiesContent();
+      });
+      card.append(btn);
+      container.append(card);
+    }
+    return;
+  }
+
+  if (activeMenuTab === 'shop') {
+    for (const si of SHOP_ITEMS) {
+      const card = document.createElement('div');
+      card.className = 'menu-item-card';
+      const costStr = `${si.costCoins} Tallér${si.costWood ? ` + ${si.costWood} 🪵 Fa` : ''}`;
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <b>${si.label}</b>
+          <span>${si.desc}</span>
+          <span class="reward-tag">Ár: ${costStr}</span>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.textContent = '🛋️ Megveszem';
+      btn.addEventListener('click', async () => {
+        if (playerRpg.coins < si.costCoins) {
+          showMenuToast(`⚠️ Nincs elég Tallérod (${si.costCoins} Tallér kell)!`, true);
+          return;
+        }
+        if ((playerRpg.resources.fa || 0) < si.costWood) {
+          showMenuToast(`⚠️ Nincs elég 🪵 Fád (${si.costWood} db kell)! Vágj fát a Vadászháznál!`, true);
+          return;
+        }
+        const resp = await apiFetch('/api/house/add-item', {
+          method: 'POST',
+          body: JSON.stringify({ type: si.type, label: si.label }),
+        });
+        if (!resp.ok) {
+          showMenuToast('⚠️ Először válassz saját karaktert a „📱 Fiók / DM” menüben!', true);
+          return;
+        }
+        playerRpg.coins -= si.costCoins;
+        playerRpg.resources.fa -= si.costWood;
+        playerRpg.xp += 20;
+        playerRpg.stats.boughtFurniture = true;
+        savePlayerRpg();
+        showMenuToast(`🎉 Megvásároltad: ${si.label}! Bekerült a saját szobádba!`);
+      });
+      card.append(btn);
+      container.append(card);
+    }
+    return;
+  }
+
+  if (activeMenuTab === 'community') {
+    // 1. Szavazás szekció
+    const voteOptions = [
+      { key: 'pekseg', label: '🥐 Falusi Pékség és Kemence' },
+      { key: 'ortorony', label: '🗼 Magas Fenyő Őrtorony' },
+      { key: 'konyvtar', label: '📚 Falusi Könyvtár és Olvasókör' },
+    ];
+    for (const vo of voteOptions) {
+      const count = playerRpg.votes[vo.key] || 0;
+      const isChosen = playerRpg.stats.votedOption === vo.key;
+      const card = document.createElement('div');
+      card.className = 'menu-item-card';
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <b>${vo.label}</b>
+          <span>Jelenlegi szavazatok: <b>${count} db</b></span>
+          ${isChosen ? '<span class="reward-tag">✓ Erre szavaztál!</span>' : ''}
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.textContent = isChosen ? '✓ Szavazatod' : '🗳️ Szavazok';
+      btn.addEventListener('click', () => {
+        if (playerRpg.stats.votedOption === vo.key) return;
+        if (playerRpg.stats.votedOption) {
+          playerRpg.votes[playerRpg.stats.votedOption] = Math.max(0, (playerRpg.votes[playerRpg.stats.votedOption] || 1) - 1);
+        } else {
+          playerRpg.xp += 15;
+        }
+        playerRpg.stats.votedOption = vo.key;
+        playerRpg.votes[vo.key] = (playerRpg.votes[vo.key] || 0) + 1;
+        savePlayerRpg();
+        el('vote-text').innerHTML = `Szavazás állása: <b>Pékség (${playerRpg.votes.pekseg})</b> · <b>Őrtorony (${playerRpg.votes.ortorony})</b>`;
+        showMenuToast(`🗳️ Leadtad a szavazatodat erre: ${vo.label}!`);
+        renderActivitiesContent();
+      });
+      card.append(btn);
+      container.append(card);
+    }
+
+    // 2. Napi Küldetések
+    for (const dq of DAILY_QUESTS) {
+      const done = dq.check();
+      const claimed = Boolean(playerRpg.claimedQuests[dq.id]);
+      const card = document.createElement('div');
+      card.className = 'menu-item-card';
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <b>${dq.title}</b>
+          <span>Állapot: ${dq.progressText()}</span>
+          <span class="reward-tag">Jutalom: +${dq.rewardCoins} Tallér</span>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.disabled = !done || claimed;
+      btn.textContent = claimed ? '✓ Felvéve' : done ? `🎁 Jutalom (+${dq.rewardCoins})` : 'Folyamatban';
+      btn.addEventListener('click', () => {
+        if (!done || claimed) return;
+        playerRpg.claimedQuests[dq.id] = true;
+        playerRpg.coins += dq.rewardCoins;
+        playerRpg.xp += 25;
+        savePlayerRpg();
+        showMenuToast(`🏆 Küldetés jutalom felvéve: +${dq.rewardCoins} Tallér!`);
+        renderActivitiesContent();
+      });
+      card.append(btn);
+      container.append(card);
+    }
+  }
+}
+
+function openActivitiesDrawer(tab = 'work') {
+  el('add-drawer').hidden = true;
+  el('chronicle-drawer').hidden = true;
+  el('claim-drawer').hidden = true;
+  el('activities-drawer').hidden = false;
+  el('menu-toast').hidden = true;
+  activeMenuTab = tab;
+  document.querySelectorAll('.act-tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.acttab === tab);
+  });
+  renderActivitiesContent();
+}
+
+el('activities-open').addEventListener('click', () => {
+  if (el('activities-drawer').hidden) openActivitiesDrawer('work');
+  else el('activities-drawer').hidden = true;
+});
+el('activities-open-top').addEventListener('click', () => openActivitiesDrawer('work'));
+el('vote-open-menu-btn').addEventListener('click', () => openActivitiesDrawer('community'));
+el('activities-close').addEventListener('click', () => { el('activities-drawer').hidden = true; });
+
+document.querySelectorAll('.act-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    activeMenuTab = btn.dataset.acttab;
+    el('menu-toast').hidden = true;
+    document.querySelectorAll('.act-tab').forEach((b) => b.classList.toggle('active', b === btn));
+    renderActivitiesContent();
+  });
+});
 
 function selectResident(res, fly = true) {
   setWalker(false);
@@ -2438,7 +2891,7 @@ function selectResident(res, fly = true) {
   el('diary-box').hidden = false;
 
   renderActionButtonsOnCard([
-    { label: '🛌 Pihenés a házban (+100% Energia)', msg: `@${res.name} kipihente magát otthon!` },
+    { label: '🛌 Pihenés a házban (+100% Energia)', deltaEnergy: 100, deltaXp: 5, msg: `@${res.name} kipihente magát otthon! (Energia: 100%)` },
     { label: `🔨 Munkába küldés (${PLACES[res.place]?.name || 'Falu'})`, onClick: () => selectLandmark(res.place === 'szabad' ? 'tuz' : res.place) },
   ], '⚡ Karakter akciók:');
 
@@ -2480,8 +2933,9 @@ function selectHouse(res) {
   el('diary-box').hidden = true;
 
   renderActionButtonsOnCard([
-    { label: '🛌 Pihenés / Alvás (+100% Energia)', msg: 'Kipihented magad, az energiád újra 100%!' },
+    { label: '🛌 Pihenés / Alvás (+100% Energia)', deltaEnergy: 100, deltaXp: 5, msg: 'Kipihented magad, az energiád újra 100%!' },
     { label: '🛋️ Szoba berendezése', onClick: () => enterHouseInterior(res.name) },
+    { label: '🛍️ Új bútor vásárlása (Bútorbolt)', onClick: () => openActivitiesDrawer('shop') },
   ], '⚡ Otthoni akciók:');
 
   pin.visible = true;
@@ -2495,6 +2949,11 @@ function selectLandmark(placeKey) {
   selectedRes = null;
   selectedPlaceKey = placeKey;
   followMode = false;
+
+  if (placeKey === 'tuz') {
+    playerRpg.stats.visitedFoter = true;
+    savePlayerRpg();
+  }
 
   const p = PLACES[placeKey] || PLACES.tuz;
   el('card').hidden = false;
@@ -2584,7 +3043,60 @@ el('btn-follow').addEventListener('click', () => {
 });
 el('event-btn').addEventListener('click', () => selectLandmark('tuz'));
 
-// --- 12. TPS "Menj vele" mód és Saját WASD Séta + Q/E kameraforgatás ---
+// --- 11.5 MENÜPONTOK ELREJTÉSE / ÖSSZECSUKÁSA & MOBIL KOMPAKT NÉZET ---
+let zenMode = false;
+function toggleZenMode() {
+  zenMode = !zenMode;
+  document.body.classList.toggle('zen-mode', zenMode);
+  const btn = el('zen-toggle-btn');
+  btn.classList.toggle('zen-active', zenMode);
+  btn.textContent = zenMode ? '👁️ Menük megjelenítése' : '👁️ Menük elrejtése';
+}
+el('zen-toggle-btn').addEventListener('click', toggleZenMode);
+
+el('brand-toggle-btn').addEventListener('click', () => {
+  const tb = el('time-box');
+  tb.hidden = !tb.hidden;
+  el('brand-toggle-btn').textContent = tb.hidden ? '⚙️ Idő/Táj ▸' : '⚙️ Idő/Táj ▾';
+});
+
+el('pills-toggle-btn').addEventListener('click', () => {
+  const row = el('main-btn-row');
+  const stats = el('player-stats-bar');
+  const nextHidden = !row.hidden;
+  row.hidden = nextHidden;
+  stats.hidden = nextHidden;
+  el('pills-toggle-btn').textContent = nextHidden ? '☰ Menü ▸' : '☰ Menü ▾';
+});
+
+el('cam-collapse-btn').addEventListener('click', () => {
+  const body = el('cam-widget-body');
+  body.hidden = !body.hidden;
+  el('cam-collapse-btn').textContent = body.hidden ? '▸ Mutat' : '▾ Elrejt';
+});
+
+el('vote-collapse-btn').addEventListener('click', () => {
+  const body = el('vote-body');
+  body.hidden = !body.hidden;
+  el('vote-collapse-btn').textContent = body.hidden ? '▸' : '▾';
+});
+
+el('room-editor-collapse').addEventListener('click', () => {
+  const body = el('room-editor-body');
+  body.hidden = !body.hidden;
+  el('room-editor-collapse').textContent = body.hidden ? '▸ Raktár megnyitása' : '▾ Raktár elrejtése';
+});
+
+// Mobil készülékeken alapból összecsukjuk a másodlagos paneleket (Idő/Táj csúszka és Kamera részletek),
+// hogy a 3D falu azonnal teljes pompájában látszódjon, de 1 érintéssel bármikor lenyithatók legyenek!
+if (window.innerWidth <= 768) {
+  el('time-box').hidden = true;
+  el('brand-toggle-btn').textContent = '⚙️ Idő/Táj ▸';
+  el('cam-widget-body').hidden = true;
+  el('cam-collapse-btn').textContent = '▸ Mutat';
+}
+
+// --- 12. TPS "Menj vele" mód és Saját WASD Séta + Mobil Érintőpad + Q/E kameraforgatás ---
 function setBehind(on) {
   behindMode = on;
   controls.enabled = !on;
@@ -2609,6 +3121,7 @@ function setWalker(on) {
   if (Boolean(walker) === on) return;
   if (on) {
     closeCard();
+    el('activities-drawer').hidden = true;
     walker = { x: controls.target.x, z: controls.target.z, heading: Math.PI, step: 0 };
     playerMesh.visible = true;
     controls.enabled = false;
@@ -2627,6 +3140,25 @@ function setWalker(on) {
 
 el('walk-open').addEventListener('click', () => setWalker(true));
 el('walk-exit').addEventListener('click', () => setWalker(false));
+
+// Mobil érintőpad (D-Pad) gombok bekötése a sétához
+document.querySelectorAll('.dpad-btn').forEach((btn) => {
+  const code = btn.dataset.key;
+  const press = (e) => {
+    e.preventDefault();
+    pressedKeys.add(code);
+    btn.classList.add('pressed');
+  };
+  const release = () => {
+    pressedKeys.delete(code);
+    btn.classList.remove('pressed');
+  };
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointerleave', release);
+  btn.addEventListener('pointercancel', release);
+});
+
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape') {
@@ -2636,12 +3168,14 @@ window.addEventListener('keydown', (e) => {
     el('add-drawer').hidden = true;
     el('chronicle-drawer').hidden = true;
     el('claim-drawer').hidden = true;
+    el('activities-drawer').hidden = true;
     el('search-dropdown').hidden = true;
     return;
   }
   if (!walker && !inRoomMode) {
     if (e.code === 'KeyQ') el('cam-rot-left').click();
     if (e.code === 'KeyE') el('cam-rot-right').click();
+    if (e.code === 'KeyH') toggleZenMode();
   }
   if (walker) pressedKeys.add(e.code);
 });
@@ -2705,7 +3239,7 @@ function renderSearchList() {
 
   const items = [];
 
-  // 1. Akciók és Menüpontok (Munka, Pihenés, Bográcsozás, Szobaberendezés stb.)
+  // 1. Akciók és Menüpontok (Munka, Pihenés, Bútorbolt, Küldetések, Szobaberendezés stb.)
   if (activeSearchTab === 'all' || activeSearchTab === 'actions') {
     const matchedActions = ACTION_MENU_ITEMS
       .filter((a) => !needle || a.title.toLowerCase().includes(needle) || a.sub.toLowerCase().includes(needle))
@@ -2720,6 +3254,7 @@ function renderSearchList() {
         onClick: () => {
           searchDropdown.hidden = true;
           if (act.type === 'walk') setWalker(true);
+          else if (act.type === 'act_tab') openActivitiesDrawer(act.tab);
           else if (act.type === 'my_home') flyToMyOwnHouse();
           else if (act.type === 'my_room') {
             if (currentConnectedUser) enterHouseInterior(currentConnectedUser);
