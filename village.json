@@ -342,19 +342,6 @@
       "wall": "#f5eedc",
       "cloth": "#3a86ff",
       "day": 5
-    },
-    {
-      "id": 25,
-      "name": "asddsa_asdasdd",
-      "title": "Horgász a stégen",
-      "place": "steg",
-      "x": -64.1,
-      "z": -45,
-      "rot": 0.81,
-      "roof": "#8c4a6b",
-      "wall": "#f5eedc",
-      "cloth": "#3a7ca5",
-      "day": 5
     }
   ]
 }

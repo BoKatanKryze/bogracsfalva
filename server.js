@@ -84,30 +84,52 @@ function createStarterHouse(username, index = 0, passwordHash = null) {
   };
 }
 
+// Utcafronti építési telkek (minden telek közvetlenül a falusi utcákhoz csatlakozik, bejárattal az út felé!)
+const STREET_PLOTS = [
+  // Déli Főutca mentén (közvetlen kapcsolat a Főtérrel és a Déli úttal)
+  { x: -6.5, z: 23.5, rot: 1.57 },
+  { x: 6.5, z: 23.5, rot: -1.57 },
+  { x: -6.5, z: 36.5, rot: 1.57 },
+  { x: 6.5, z: 36.5, rot: -1.57 },
+  // Nyugati Vadász és Malom út mentén
+  { x: -22.0, z: 1.5, rot: 0.0 },
+  { x: -34.0, z: 1.5, rot: 0.0 },
+  // Keleti Kocsma és Horgász part út mentén
+  { x: 22.0, z: 1.5, rot: 0.0 },
+  { x: 34.0, z: 1.5, rot: 0.0 },
+  // Dél-Nyugati Betyár köz
+  { x: -35.0, z: 28.0, rot: 2.1 },
+  { x: -20.0, z: 44.0, rot: 2.8 },
+  // Dél-Keleti Piac és Méhész köz
+  { x: 36.0, z: 32.0, rot: -2.3 },
+  { x: 20.0, z: 44.0, rot: -2.8 },
+  // Északi Főutca (hídtól északra)
+  { x: -6.5, z: -26.0, rot: 1.57 },
+  { x: 6.5, z: -26.0, rot: -1.57 },
+  { x: -6.5, z: -38.0, rot: 1.57 },
+  { x: 6.5, z: -38.0, rot: -1.57 },
+  // Észak-Nyugati Vadon út
+  { x: -28.0, z: -32.0, rot: 0.8 },
+  { x: -44.0, z: -32.0, rot: 0.8 },
+  // Észak-Keleti Gyümölcsös út
+  { x: 24.0, z: -32.0, rot: -0.8 },
+  { x: 36.0, z: -38.0, rot: -0.8 },
+  // Déli Mezei utcavég
+  { x: 0.0, z: 48.0, rot: 3.14 },
+];
+
 function findNextPlot(houses) {
   const occupied = houses.map((h) => [h.x, h.z]);
-  const riverZ = (x) => Math.sin(x * 0.025) * 6 - 14;
-
-  for (let i = houses.length; i < 2500; i++) {
-    const angle = i * 0.68;
-    const radius = 22 + Math.sqrt(i) * 11.5;
-    const x = Math.round(Math.cos(angle) * radius * 10) / 10;
-    const z = Math.round(Math.sin(angle) * radius * 10) / 10;
-
-    if (Math.abs(z - riverZ(x)) < 11) continue;
-    if (Math.hypot(x, z) < 20) continue;
-    if (Math.hypot(x - 32, z + 28) < 14) continue;
-    if (Math.hypot(x + 38, z + 34) < 14) continue;
-    if (Math.hypot(x - 42, z - 24) < 15) continue; // legelő környéke
-    if (Math.hypot(x + 32, z - 28) < 12) continue; // szélmalom környéke
-
-    const tooClose = occupied.some(([ox, oz]) => Math.hypot(x - ox, z - oz) < 10.5);
-    if (!tooClose) {
-      const rot = Math.round((Math.atan2(-x, -z) + (i % 3 - 1) * 0.15) * 100) / 100;
-      return { x, z, rot };
+  for (const plot of STREET_PLOTS) {
+    const isTaken = occupied.some(([ox, oz]) => Math.hypot(plot.x - ox, plot.z - oz) < 6.5);
+    if (!isTaken) {
+      return { x: plot.x, z: plot.z, rot: plot.rot };
     }
   }
-  return { x: 40 + houses.length * 8, z: 40, rot: 0 };
+  const extraIdx = houses.length - STREET_PLOTS.length;
+  const side = extraIdx % 2 === 0 ? 1 : -1;
+  const z = 52 + Math.floor(extraIdx / 2) * 10;
+  return { x: side * 6.5, z, rot: side > 0 ? -1.57 : 1.57 };
 }
 
 async function readVillage() {
