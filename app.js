@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createClient } from '@supabase/supabase-js';
 
 const el = (id) => document.getElementById(id);
 const HOUR = 3600;
@@ -697,7 +698,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261110-7';
+const APP_VERSION = '20261110-8';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -3257,8 +3258,36 @@ function updatePlayerStatsUI() {
 }
 updatePlayerStatsUI();
 
-// --- 11.3 MEGOSZTOTT ÉLŐ FELHŐ-SZINKRONIZÁCIÓ (api.restful-api.dev) & RANGLISTA (LEADERBOARD) ---
+// --- 11.3 SUPABASE VALÓS IDEJŰ (REALTIME WEBSOCKET) & FELHŐ SZINKRONIZÁCIÓ ---
+// A Supabase Realtime csatornája valós időben (WebSocketen) továbbítja a szavazatokat és a ranglistát,
+// így minden látogató azonnal látja a változásokat!
+const DEFAULT_SUPABASE_CONFIG = {
+  url: '',
+  anonKey: ''
+};
+
+function getActiveSupabaseConfig() {
+  try {
+    const saved = localStorage.getItem('kisfalu_supabase_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.url && parsed.anonKey) return parsed;
+    }
+  } catch { /* fallback */ }
+  const params = new URLSearchParams(window.location.search);
+  const qUrl = params.get('supabase_url');
+  const qKey = params.get('supabase_key');
+  if (qUrl && qKey) {
+    return { url: qUrl, anonKey: qKey };
+  }
+  return DEFAULT_SUPABASE_CONFIG;
+}
+
 const CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1c6cb684f00d7';
+
+let supabase = null;
+let supabaseRealtimeChannel = null;
+let supabaseStatus = 'unconfigured'; // 'connected' | 'connecting' | 'error' | 'unconfigured'
 
 let cloudState = {
   votes: { pekseg: 52, ortorony: 40, konyvtar: 28 },
@@ -3295,6 +3324,13 @@ const CANONICAL_LEADERBOARD = [
   { name: 'szundi_szabi', displayName: 'Szundi Szabi', title: 'Főtéri Álomszuszék', xp: 90, coins: 80, isNpc: true }
 ];
 
+function getVoteLabel(key) {
+  if (key === 'pekseg') return '🥐 Falusi Pékség és Kemence';
+  if (key === 'ortorony') return '🗼 Magas Fenyő Őrtorony';
+  if (key === 'konyvtar') return '📚 Falusi Könyvtár és Olvasókör';
+  return key;
+}
+
 function updateVoteBannerUI() {
   const v = (cloudState && cloudState.votes) || (playerRpg && playerRpg.votes) || { pekseg: 52, ortorony: 40, konyvtar: 28 };
   const txt = el('vote-text');
@@ -3303,7 +3339,180 @@ function updateVoteBannerUI() {
   }
 }
 
+function updateSupabaseStatusUI() {
+  const badge = el('sb-badge-pill');
+  if (badge) {
+    if (supabaseStatus === 'connected') {
+      badge.textContent = '⚡ Supabase Realtime: Csatlakozva';
+      badge.style.color = '#15803d';
+      badge.style.background = '#dcfce7';
+      badge.style.border = '1px solid #86efac';
+    } else if (supabaseStatus === 'connecting') {
+      badge.textContent = '⏳ Supabase: Csatlakozás...';
+      badge.style.color = '#854d0e';
+      badge.style.background = '#fef9c3';
+      badge.style.border = '1px solid #fde047';
+    } else if (supabaseStatus === 'error') {
+      badge.textContent = '⚠️ Supabase: Kapcsolódási hiba';
+      badge.style.color = '#991b1b';
+      badge.style.background = '#fee2e2';
+      badge.style.border = '1px solid #fca5a5';
+    } else {
+      badge.textContent = '⚙️ Supabase: Nincs beállítva';
+      badge.style.color = 'var(--muted)';
+      badge.style.background = 'var(--paper-hover)';
+      badge.style.border = '1px solid #d4c29d';
+    }
+  }
+  updateSupabaseModalStatus();
+}
+
+function updateSupabaseModalStatus() {
+  const box = el('sb-status-box');
+  if (!box) return;
+  if (supabaseStatus === 'connected') {
+    box.style.color = '#15803d';
+    box.innerHTML = '🟢 <b>Csatlakoztatva:</b> Valós idejű WebSocket Realtime kapcsolat aktív!';
+  } else if (supabaseStatus === 'connecting') {
+    box.style.color = '#854d0e';
+    box.innerHTML = '⏳ <b>Csatlakozás folyamatban...</b>';
+  } else if (supabaseStatus === 'error') {
+    box.style.color = '#991b1b';
+    box.innerHTML = '⚠️ <b>Hiba történt:</b> Ellenőrizd a megadott Project URL-t és Anon kulcsot!';
+  } else {
+    box.style.color = 'var(--muted)';
+    box.innerHTML = '⚪ <b>Nincs Supabase beállítva:</b> Jelenleg az automatikus REST felhő DB szinkronizáció aktív.';
+  }
+}
+
+async function fetchSupabaseData() {
+  if (!supabase) return;
+  try {
+    const { data: vData, error: vErr } = await supabase.from('community_votes').select('*');
+    if (!vErr && vData && vData.length) {
+      for (const row of vData) {
+        cloudState.votes[row.option_key] = row.votes_count;
+      }
+      if (playerRpg) playerRpg.votes = { ...playerRpg.votes, ...cloudState.votes };
+      updateVoteBannerUI();
+    }
+
+    const { data: lbData, error: lbErr } = await supabase.from('village_leaderboard').select('*');
+    if (!lbErr && lbData && lbData.length) {
+      for (const row of lbData) {
+        cloudState.leaderboard[row.username] = {
+          name: row.username,
+          displayName: row.display_name,
+          title: row.title,
+          xp: row.xp,
+          coins: row.coins,
+          lastActive: Date.now()
+        };
+      }
+      if (!el('activities-drawer').hidden && activeMenuTab === 'leaderboard') {
+        renderActivitiesContent();
+      }
+    }
+    cloudLastSyncedAt = Date.now();
+  } catch (err) {
+    console.warn('fetchSupabaseData hiba:', err);
+  }
+}
+
+async function initSupabase() {
+  const cfg = getActiveSupabaseConfig();
+  if (!cfg.url || !cfg.anonKey) {
+    supabaseStatus = 'unconfigured';
+    updateSupabaseStatusUI();
+    return;
+  }
+
+  try {
+    supabaseStatus = 'connecting';
+    updateSupabaseStatusUI();
+    supabase = createClient(cfg.url, cfg.anonKey, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
+    });
+
+    // Feliratkozás valós idejű WebSocket csatornára
+    supabaseRealtimeChannel = supabase.channel('bogracsfalva_realtime', {
+      config: { broadcast: { self: false } }
+    });
+
+    supabaseRealtimeChannel
+      // A) Postgres Changes események (Adatbázis táblák valós idejű változásai)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_votes' }, (payload) => {
+        console.log('⚡ [Supabase Realtime] Szavazat tábla változás:', payload);
+        if (payload.new && payload.new.option_key) {
+          cloudState.votes[payload.new.option_key] = payload.new.votes_count;
+          if (playerRpg) playerRpg.votes[payload.new.option_key] = payload.new.votes_count;
+          updateVoteBannerUI();
+          if (!el('activities-drawer').hidden) renderActivitiesContent();
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'village_leaderboard' }, (payload) => {
+        console.log('⚡ [Supabase Realtime] Ranglista tábla változás:', payload);
+        if (payload.new && payload.new.username) {
+          cloudState.leaderboard[payload.new.username] = {
+            name: payload.new.username,
+            displayName: payload.new.display_name || payload.new.username,
+            title: payload.new.title,
+            xp: payload.new.xp,
+            coins: payload.new.coins,
+            lastActive: Date.now()
+          };
+          if (!el('activities-drawer').hidden && activeMenuTab === 'leaderboard') {
+            renderActivitiesContent();
+          }
+        }
+      })
+      // B) Realtime Broadcast események (Azonnali kliens-közti WebSocket üzenetek)
+      .on('broadcast', { event: 'vote_cast' }, ({ payload }) => {
+        console.log('⚡ [Supabase Broadcast] Szavazat érkezett:', payload);
+        if (payload && payload.votes) {
+          cloudState.votes = { ...cloudState.votes, ...payload.votes };
+          if (playerRpg) playerRpg.votes = { ...playerRpg.votes, ...cloudState.votes };
+          updateVoteBannerUI();
+          if (!el('activities-drawer').hidden) renderActivitiesContent();
+        }
+      })
+      .on('broadcast', { event: 'leaderboard_update' }, ({ payload }) => {
+        console.log('⚡ [Supabase Broadcast] Ranglista frissítés érkezett:', payload);
+        if (payload && payload.user) {
+          cloudState.leaderboard[payload.user.name] = payload.user;
+          if (!el('activities-drawer').hidden && activeMenuTab === 'leaderboard') {
+            renderActivitiesContent();
+          }
+        }
+      })
+      .subscribe((status) => {
+        console.log('⚡ Supabase Realtime állapot:', status);
+        if (status === 'SUBSCRIBED') {
+          supabaseStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          supabaseStatus = 'error';
+        }
+        updateSupabaseStatusUI();
+      });
+
+    // Kezdeti adatok lekérése a Supabase adatbázisból
+    await fetchSupabaseData();
+  } catch (err) {
+    console.warn('Supabase inicializálási hiba:', err);
+    supabaseStatus = 'error';
+    updateSupabaseStatusUI();
+  }
+}
+
 async function fetchCloudState() {
+  if (supabase && supabaseStatus === 'connected') {
+    await fetchSupabaseData();
+    return;
+  }
   try {
     const res = await fetch(CLOUD_SYNC_URL);
     if (!res.ok) return;
@@ -3330,8 +3539,36 @@ async function fetchCloudState() {
 }
 
 async function pushCloudVote(voteKey, prevKey = null) {
+  // 1. Optimistic lokális frissítés
+  cloudState.votes[voteKey] = (cloudState.votes[voteKey] || 0) + 1;
+  if (prevKey && cloudState.votes[prevKey] !== undefined) {
+    cloudState.votes[prevKey] = Math.max(0, cloudState.votes[prevKey] - 1);
+  }
+  updateVoteBannerUI();
+
+  // 2. Ha van aktív Supabase kapcsolat: Realtime Broadcast + DB mentés
+  if (supabase) {
+    try {
+      if (supabaseRealtimeChannel) {
+        supabaseRealtimeChannel.send({
+          type: 'broadcast',
+          event: 'vote_cast',
+          payload: { votes: cloudState.votes, voteKey, voter: currentConnectedUser }
+        });
+      }
+
+      await supabase.from('community_votes').upsert([
+        { option_key: voteKey, label: getVoteLabel(voteKey), votes_count: cloudState.votes[voteKey], updated_at: new Date().toISOString() },
+        ...(prevKey ? [{ option_key: prevKey, label: getVoteLabel(prevKey), votes_count: cloudState.votes[prevKey], updated_at: new Date().toISOString() }] : [])
+      ]);
+    } catch (sbErr) {
+      console.warn('Supabase szavazat mentési hiba:', sbErr);
+    }
+  }
+
+  // 3. Tartalék REST szinkronizáció
   try {
-    let currentData = { votes: { pekseg: 52, ortorony: 40, konyvtar: 28 }, leaderboard: {} };
+    let currentData = { votes: cloudState.votes, leaderboard: cloudState.leaderboard };
     try {
       const getRes = await fetch(CLOUD_SYNC_URL);
       if (getRes.ok) {
@@ -3346,34 +3583,13 @@ async function pushCloudVote(voteKey, prevKey = null) {
     }
     currentData.votes[voteKey] = (currentData.votes[voteKey] || 0) + 1;
 
-    if (currentConnectedUser && playerRpg) {
-      currentData.leaderboard = currentData.leaderboard || {};
-      const { title } = getPlayerLevelInfo();
-      currentData.leaderboard[currentConnectedUser] = {
-        name: currentConnectedUser,
-        displayName: currentConnectedUser,
-        title,
-        xp: playerRpg.xp,
-        coins: playerRpg.coins,
-        lastActive: Date.now()
-      };
-    }
-
-    const patchRes = await fetch(CLOUD_SYNC_URL, {
+    await fetch(CLOUD_SYNC_URL, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: currentData })
     });
-    if (patchRes.ok) {
-      const patchBody = await patchRes.json();
-      if (patchBody && patchBody.data) {
-        cloudState.votes = patchBody.data.votes;
-        if (playerRpg) playerRpg.votes = { ...playerRpg.votes, ...cloudState.votes };
-        updateVoteBannerUI();
-      }
-    }
   } catch (err) {
-    console.warn('Szavazat felhőbe küldési hiba:', err);
+    console.warn('REST fallback hiba:', err);
   }
 }
 
@@ -3387,7 +3603,7 @@ function queueCloudLeaderboardPush() {
       const { title } = getPlayerLevelInfo();
       const patchObj = {
         name: username,
-        displayName: currentConnectedUser || 'Vándor (Te)',
+        displayName: currentConnectedUser ? `@${currentConnectedUser}` : 'Vándor (Te)',
         title,
         xp: playerRpg.xp,
         coins: playerRpg.coins,
@@ -3395,6 +3611,31 @@ function queueCloudLeaderboardPush() {
       };
       cloudState.leaderboard[username] = patchObj;
 
+      // 1. Supabase Realtime Broadcast + DB mentés
+      if (supabase) {
+        try {
+          if (supabaseRealtimeChannel) {
+            supabaseRealtimeChannel.send({
+              type: 'broadcast',
+              event: 'leaderboard_update',
+              payload: { user: patchObj }
+            });
+          }
+
+          await supabase.from('village_leaderboard').upsert({
+            username,
+            display_name: patchObj.displayName,
+            title: patchObj.title,
+            xp: patchObj.xp,
+            coins: patchObj.coins,
+            updated_at: new Date().toISOString()
+          });
+        } catch (sbErr) {
+          console.warn('Supabase leaderboard mentési hiba:', sbErr);
+        }
+      }
+
+      // 2. Tartalék REST szinkronizáció
       let currentData = { votes: cloudState.votes, leaderboard: cloudState.leaderboard };
       try {
         const res = await fetch(CLOUD_SYNC_URL);
@@ -3414,12 +3655,59 @@ function queueCloudLeaderboardPush() {
       });
       cloudLastSyncedAt = Date.now();
     } catch (err) {
-      console.warn('Leaderboard felhőbe küldési hiba:', err);
+      console.warn('Leaderboard küldési hiba:', err);
     }
-  }, 1500);
+  }, 1200);
 }
 
-// Felhő DB kezdeti lekérése és 8 másodpercenkénti automatikus frissítése
+function openSupabaseModal() {
+  const modal = el('supabase-modal');
+  if (!modal) return;
+  const cfg = getActiveSupabaseConfig();
+  el('sb-input-url').value = cfg.url || '';
+  el('sb-input-key').value = cfg.anonKey || '';
+  updateSupabaseModalStatus();
+  modal.hidden = false;
+}
+
+el('supabase-modal-close')?.addEventListener('click', () => {
+  el('supabase-modal').hidden = true;
+});
+
+el('sb-save-btn')?.addEventListener('click', async () => {
+  const url = el('sb-input-url').value.trim();
+  const key = el('sb-input-key').value.trim();
+  if (!url || !key) {
+    alert('Kérlek add meg a Supabase Project URL-t és az Anon kulcsot!');
+    return;
+  }
+  localStorage.setItem('kisfalu_supabase_config', JSON.stringify({ url, anonKey: key }));
+  showMenuToast('⚡ Supabase kapcsolat mentve! Csatlakozás...');
+  await initSupabase();
+  updateSupabaseModalStatus();
+  setTimeout(() => {
+    if (supabaseStatus === 'connected') {
+      showMenuToast('🎉 Sikeresen csatlakozva a Supabase Realtime-hoz!');
+      el('supabase-modal').hidden = true;
+      if (!el('activities-drawer').hidden) renderActivitiesContent();
+    }
+  }, 800);
+});
+
+el('sb-clear-btn')?.addEventListener('click', () => {
+  localStorage.removeItem('kisfalu_supabase_config');
+  el('sb-input-url').value = '';
+  el('sb-input-key').value = '';
+  supabase = null;
+  supabaseRealtimeChannel = null;
+  supabaseStatus = 'unconfigured';
+  updateSupabaseStatusUI();
+  updateSupabaseModalStatus();
+  showMenuToast('Supabase kapcsolat törölve. Fallback REST szinkron aktív.');
+});
+
+// Kezdeti Supabase inicializálás és háttér-lekérés
+initSupabase();
 fetchCloudState();
 setInterval(fetchCloudState, 8000);
 
@@ -3973,23 +4261,33 @@ function renderActivitiesContent() {
     }
     container.append(listWrap);
 
-    // 5. Élő Felhő Szinkronizáció lábléc és azonnali frissítés gomb
+    // 5. Élő Felhő & Supabase Realtime lábléc és beállítások
     const footer = document.createElement('div');
     footer.className = 'lb-footer-bar';
     const lastSyncTxt = cloudLastSyncedAt ? `Frissítve: ${new Date(cloudLastSyncedAt).toLocaleTimeString('hu-HU')}` : 'Élő szinkron aktív';
     footer.innerHTML = `
-      <span>🟢 Felhő DB: <b>${lastSyncTxt}</b></span>
-      <button id="lb-refresh-btn" class="mini-btn" type="button">🔄 Élő frissítés</button>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <span id="sb-badge-pill" style="font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; cursor:pointer;" title="Kattints a Supabase beállításokhoz!">⚙️ Supabase Realtime</span>
+        <span style="font-size:10.5px; color:var(--muted);">${lastSyncTxt}</span>
+      </div>
+      <div style="display:flex; gap:4px;">
+        <button id="sb-config-btn" class="mini-btn" type="button" title="Supabase Projekt Beállítások">⚙️ Supabase</button>
+        <button id="lb-refresh-btn" class="mini-btn" type="button">🔄 Frissítés</button>
+      </div>
     `;
     footer.querySelector('#lb-refresh-btn').addEventListener('click', async () => {
       const b = footer.querySelector('#lb-refresh-btn');
       b.textContent = '⏳ Frissül...';
       b.disabled = true;
-      await fetchCloudState();
+      if (supabase && supabaseStatus === 'connected') await fetchSupabaseData();
+      else await fetchCloudState();
       b.textContent = '✓ Kész';
       setTimeout(() => renderActivitiesContent(), 300);
     });
+    footer.querySelector('#sb-config-btn').addEventListener('click', () => openSupabaseModal());
+    footer.querySelector('#sb-badge-pill').addEventListener('click', () => openSupabaseModal());
     container.append(footer);
+    updateSupabaseStatusUI();
     return;
   }
 }

@@ -1268,7 +1268,8 @@
   {
     "imports": {
       "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/",
+      "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
     }
   }
   </script>
@@ -1642,6 +1643,34 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=20261110-7"></script>
+  <!-- 4. Supabase Realtime Beállítások Modál -->
+  <aside id="supabase-modal" class="drawer" hidden>
+    <button id="supabase-modal-close" class="close-x" aria-label="Bezárás">×</button>
+    <h2>⚡ Supabase Realtime Beállítások</h2>
+    <p style="margin-bottom: 8px;">Csatlakoztasd a falut a Supabase projektedhez, hogy a szavazatok és a ranglista azonnal, valós időben (WebSocketen) frissüljön minden látogatónál!</p>
+    
+    <div class="gdpr-box" style="margin-bottom: 10px;">
+      💡 <b>Gyors beállítás:</b> Másold be a Supabase Dashboardod <b>Project Settings → API</b> oldaláról a <b>Project URL</b>-t és a publikus <b>anon public kulcsot</b>!
+    </div>
+
+    <label for="sb-input-url"><b>Supabase Project URL:</b></label>
+    <input id="sb-input-url" type="url" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off" spellcheck="false" style="width:100%; padding:8px; margin:4px 0 10px; border:1px solid #c8b082; border-radius:8px; font-family:monospace; font-size:12px;">
+
+    <label for="sb-input-key"><b>Supabase Anon Public Key:</b></label>
+    <input id="sb-input-key" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." autocomplete="off" style="width:100%; padding:8px; margin:4px 0 10px; border:1px solid #c8b082; border-radius:8px; font-family:monospace; font-size:12px;">
+
+    <div style="display:flex; gap:6px; margin-top:8px;">
+      <button id="sb-save-btn" class="submit-btn" type="button" style="flex:1;">💾 Mentés és Csatlakozás</button>
+      <button id="sb-clear-btn" class="submit-btn secondary" type="button" style="flex:none; width:80px;">Törlés</button>
+    </div>
+
+    <div id="sb-status-box" style="margin-top:12px; font-size:12.5px; font-weight:700;"></div>
+
+    <div style="margin-top:16px; padding-top:10px; border-top:1px solid rgba(44,28,12,.15); font-size:11.5px; color:var(--muted);">
+      <b>📄 SQL Séma:</b> A szükséges adatbázis táblák és a Realtime beállításához másold be a repóban lévő <code>supabase_schema.sql</code> tartalmát a Supabase SQL Editorba és futtasd le!
+    </div>
+  </aside>
+
+  <script type="module" src="./app.js?v=20261110-8"></script>
 </body>
 </html>
