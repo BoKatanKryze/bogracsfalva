@@ -86,7 +86,7 @@ function createStarterHouse(username, index = 0, passwordHash = null) {
 
 // Utcafronti építési telkek (minden telek közvetlenül a falusi utcákhoz csatlakozik, bejárattal az út felé!)
 const STREET_PLOTS = [
-  { x: -48.9, z: -4, rot: 0.308, houseStyle: 1 },
+  { x: -25.0, z: -8.0, rot: 0.0, houseStyle: 1 },
   { x: -61.9, z: 0.7, rot: 0.4037, houseStyle: 4 },
   { x: -74.5, z: 6.4, rot: 0.4346, houseStyle: 2 },
   { x: -84, z: 10.8, rot: 0.4346, houseStyle: 0 },
@@ -105,7 +105,7 @@ const STREET_PLOTS = [
   { x: 49, z: -44.9, rot: 0.2312, houseStyle: 4 },
   { x: 62, z: -48.1, rot: 0.2449, houseStyle: 2 },
   { x: 72.2, z: -50.6, rot: 0.2449, houseStyle: 0 },
-  { x: -11.4, z: -47, rot: 1.8491, houseStyle: 3 },
+  { x: -25.4, z: 60.5, rot: -2.922, houseStyle: 3 },
   { x: -31.8, z: -52.9, rot: -0.2985, houseStyle: 1 },
   { x: -58.6, z: -42.9, rot: 2.9105, houseStyle: 4 },
   { x: -68.8, z: -45.3, rot: 2.9105, houseStyle: 2 },
