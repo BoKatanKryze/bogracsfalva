@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Bográcsfalva – Közösségi 3D Falu</title>
   <style>html, body { margin: 0; padding: 0; background: #8fb24a; overflow: hidden; }</style>
-  <link rel="stylesheet" href="./styles.css?v=20261115-4">
+  <link rel="stylesheet" href="./styles.css?v=20261115-5">
   <script type="importmap">
   {
     "imports": {
@@ -38,7 +38,7 @@
           <div>
             <b id="village-title">Bográcsfalva</b>
             <span id="resident-count">Betöltés…</span>
-            <span id="plot-capacity-badge" style="font-weight: 700; color: var(--green); font-style: normal;">🏘️ Telkek: 24 / 40 foglalt</span>
+            <span id="plot-capacity-badge" style="font-weight: 700; color: var(--green); font-style: normal;">🏘️ Telkek: 24 / 48 foglalt</span>
             <span id="clock-text">12:00</span>
           </div>
           <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">
@@ -109,10 +109,15 @@
     <!-- Kereső + Z-A Kategóriás Lista (Házak, Játékosok, Akciók/Menüpontok) -->
     <div id="search">
       <div class="search-input-wrap">
-        <input id="q" type="search" placeholder="Keresés (Házak, Játékosok, Akciók)…" autocomplete="off" spellcheck="false">
+        <input id="q" type="search" placeholder="Ház, lakó vagy hely keresése…" autocomplete="off" spellcheck="false">
         <button id="search-toggle-btn" type="button">📋 Lista (Z–A)</button>
       </div>
-      <div id="search-dropdown" hidden>
+      <div id="search-dropdown" role="listbox" hidden>
+        <div id="house-filter-bar" class="house-filter-bar" role="group" aria-label="Házak szűrése állapot szerint">
+          <button type="button" class="house-filter-btn active" data-house-filter="all">🏘️ Minden</button>
+          <button type="button" class="house-filter-btn" data-house-filter="claimed">🏠 Befoglalt</button>
+          <button type="button" class="house-filter-btn" data-house-filter="free">🔓 Szabad</button>
+        </div>
         <div id="search-tabs">
           <button class="s-tab active" data-tab="all" type="button">Mind</button>
           <button class="s-tab" data-tab="houses" type="button">🏡 Házak</button>
@@ -123,7 +128,9 @@
           <span id="search-count-label">Rendezés: ABC szerint csökkenő (Z → A)</span>
           <button id="sort-dir-btn" class="mini-btn" type="button">Sorrend: Z → A ↓</button>
         </div>
-        <ul id="hits"></ul>
+        <div id="search-results-list">
+          <ul id="hits"></ul>
+        </div>
       </div>
     </div>
   </div>
@@ -211,12 +218,13 @@
     <h2>🎒 Falusi Élet & Menü</h2>
     <p style="margin-bottom: 6px;">Vállalj munkát Tallérért és nyersanyagokért, töltődj fel a Főtéren vagy otthon, vásárolj új 3D bútorokat a szobádba, és szavazz a falu jövőjéről!</p>
 
-    <div class="act-tabs">
-      <button class="act-tab active" data-acttab="work" type="button">🔨 Munka</button>
-      <button class="act-tab" data-acttab="rest" type="button">🍲 Pihenés</button>
-      <button class="act-tab" data-acttab="shop" type="button">🛋️ Bútorbolt</button>
-      <button class="act-tab" data-acttab="community" type="button">🏛️ Küldetés & Szavazás</button>
-      <button class="act-tab" data-acttab="leaderboard" type="button">🏆 Ranglista</button>
+    <div class="act-tabs drawer-tabs">
+      <button class="act-tab drawer-tab active" data-acttab="work" data-tab="tab-work" type="button">🔨 Munka</button>
+      <button class="act-tab drawer-tab" data-acttab="rest" data-tab="tab-rest" type="button">🍲 Pihenés</button>
+      <button class="act-tab drawer-tab" data-acttab="shop" data-tab="tab-shop" type="button">🛋️ Bútorbolt</button>
+      <button class="act-tab drawer-tab" data-acttab="community" data-tab="tab-community" type="button">🏛️ Küldetés & Szavazás</button>
+      <button class="act-tab drawer-tab" data-acttab="leaderboard" data-tab="tab-leaderboard" type="button">🏆 Ranglista</button>
+      <button class="act-tab drawer-tab" data-acttab="houses" data-tab="tab-houses" type="button">🏡 Házak</button>
     </div>
 
     <div id="work-progress-box" hidden>
@@ -227,6 +235,16 @@
     <div id="menu-toast" hidden></div>
 
     <div id="activities-content" class="menu-card-list"></div>
+
+    <div id="tab-houses" class="drawer-tab-panel" hidden>
+      <div class="house-filter-bar" role="group" aria-label="Házak szűrése állapot szerint">
+        <button type="button" class="house-filter-btn active" data-house-filter="all">🏘️ Minden</button>
+        <button type="button" class="house-filter-btn" data-house-filter="claimed">🏠 Befoglalt</button>
+        <button type="button" class="house-filter-btn" data-house-filter="free">🔓 Szabad</button>
+      </div>
+      <div id="houses-directory-summary" class="houses-directory-summary"></div>
+      <div id="houses-directory-list" class="houses-directory-list"></div>
+    </div>
   </aside>
 
   <!-- 1. GDPR-mentes (Zero-PII) Belépés & Saját Házam Panel -->
@@ -278,7 +296,7 @@
     <button id="add-close" class="close-x" aria-label="Bezárás">×</button>
     <h2>🏡 Szabad Telek Elfoglalása</h2>
     <div id="add-capacity-banner" class="capacity-banner">
-      <span id="add-capacity-text">🏘️ Foglalt telkek: 24 / 40</span>
+      <span id="add-capacity-text">🏘️ Foglalt telkek: 24 / 48</span>
       <span id="add-capacity-sub">Procedurális falu</span>
     </div>
     <div class="gdpr-box">
@@ -445,6 +463,6 @@
     </button>
   </nav>
 
-  <script type="module" src="./app.js?v=20261115-4"></script>
+  <script type="module" src="./app.js?v=20261115-5"></script>
 </body>
 </html>

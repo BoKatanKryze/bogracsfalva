@@ -86,44 +86,65 @@ function createStarterHouse(username, index = 0, passwordHash = null) {
 
 // Utcafronti építési telkek (minden telek közvetlenül a falusi utcákhoz csatlakozik, bejárattal az út felé!)
 const STREET_PLOTS = [
-  // Déli Főutca mentén (közvetlen kapcsolat a Főtérrel és a Déli úttal)
-  { x: -6.5, z: 23.5, rot: 1.57 },
-  { x: 6.5, z: 23.5, rot: -1.57 },
-  { x: -6.5, z: 36.5, rot: 1.57 },
-  { x: 6.5, z: 36.5, rot: -1.57 },
-  // Nyugati Vadász és Malom út mentén
-  { x: -22.0, z: 1.5, rot: 0.0 },
-  { x: -34.0, z: 1.5, rot: 0.0 },
-  // Keleti Kocsma és Horgász part út mentén
-  { x: 22.0, z: 1.5, rot: 0.0 },
-  { x: 34.0, z: 1.5, rot: 0.0 },
-  // Dél-Nyugati Betyár köz
-  { x: -35.0, z: 28.0, rot: 2.1 },
-  { x: -20.0, z: 44.0, rot: 2.8 },
-  // Dél-Keleti Piac és Méhész köz
-  { x: 36.0, z: 32.0, rot: -2.3 },
-  { x: 20.0, z: 44.0, rot: -2.8 },
-  // Északi Főutca (hídtól északra)
-  { x: -6.5, z: -26.0, rot: 1.57 },
-  { x: 6.5, z: -26.0, rot: -1.57 },
-  { x: -6.5, z: -38.0, rot: 1.57 },
-  { x: 6.5, z: -38.0, rot: -1.57 },
-  // Észak-Nyugati Vadon út
-  { x: -28.0, z: -32.0, rot: 0.8 },
-  { x: -44.0, z: -32.0, rot: 0.8 },
-  // Észak-Keleti Gyümölcsös út
-  { x: 24.0, z: -32.0, rot: -0.8 },
-  { x: 36.0, z: -38.0, rot: -0.8 },
-  // Déli Mezei utcavég
-  { x: 6.5, z: 46.0, rot: -1.57 },
+  { x: -48.9, z: -4, rot: 0.308, houseStyle: 1 },
+  { x: -61.9, z: 0.7, rot: 0.4037, houseStyle: 4 },
+  { x: -74.5, z: 6.4, rot: 0.4346, houseStyle: 2 },
+  { x: -84, z: 10.8, rot: 0.4346, houseStyle: 0 },
+  { x: 55.7, z: 15, rot: 2.7705, houseStyle: 3 },
+  { x: 74.4, z: 4.9, rot: -0.4048, houseStyle: 1 },
+  { x: 84.1, z: 9, rot: -0.4048, houseStyle: 4 },
+  { x: -26, z: 36.4, rot: -2.796, houseStyle: 2 },
+  { x: -39.2, z: 40.4, rot: -2.897, houseStyle: 0 },
+  { x: -50.7, z: 43.2, rot: -2.9041, houseStyle: 3 },
+  { x: -73.8, z: 48.3, rot: -2.9304, houseStyle: 1 },
+  { x: 26.2, z: 35.7, rot: 2.8383, houseStyle: 4 },
+  { x: 50.9, z: 41.4, rot: 2.9339, houseStyle: 2 },
+  { x: 73.8, z: 46.3, rot: 2.9304, houseStyle: 0 },
+  { x: 23.6, z: -39.8, rot: 0.1657, houseStyle: 3 },
+  { x: 36.6, z: -42.3, rot: 0.1895, houseStyle: 1 },
+  { x: 49, z: -44.9, rot: 0.2312, houseStyle: 4 },
+  { x: 62, z: -48.1, rot: 0.2449, houseStyle: 2 },
+  { x: 72.2, z: -50.6, rot: 0.2449, houseStyle: 0 },
+  { x: -11.4, z: -47, rot: 1.8491, houseStyle: 3 },
+  { x: -31.8, z: -52.9, rot: -0.2985, houseStyle: 1 },
+  { x: -58.6, z: -42.9, rot: 2.9105, houseStyle: 4 },
+  { x: -68.8, z: -45.3, rot: 2.9105, houseStyle: 2 },
+  { x: -68.4, z: -62.3, rot: -0.2311, houseStyle: 0 },
 ];
 
-function findNextPlot(houses) {
+function findNextPlot(houses, requestedPlot = null) {
   const occupied = houses.map((h) => [h.x, h.z]);
+  if (
+    requestedPlot &&
+    typeof requestedPlot === 'object' &&
+    Number.isFinite(requestedPlot.x) &&
+    Number.isFinite(requestedPlot.z)
+  ) {
+    const rx = Number(requestedPlot.x);
+    const rz = Number(requestedPlot.z);
+    const isTaken = occupied.some(([ox, oz]) => Math.hypot(rx - ox, rz - oz) < 6.5);
+    if (!isTaken) {
+      const matched = STREET_PLOTS.find((p) => Math.hypot(p.x - rx, p.z - rz) < 1.0);
+      if (matched) {
+        return {
+          x: matched.x,
+          z: matched.z,
+          rot: matched.rot,
+          houseStyle: typeof requestedPlot.houseStyle === 'number' ? requestedPlot.houseStyle : matched.houseStyle,
+        };
+      }
+      return {
+        x: rx,
+        z: rz,
+        rot: Number(requestedPlot.rot) || 0,
+        houseStyle: typeof requestedPlot.houseStyle === 'number' ? requestedPlot.houseStyle : undefined,
+      };
+    }
+  }
   for (const plot of STREET_PLOTS) {
     const isTaken = occupied.some(([ox, oz]) => Math.hypot(plot.x - ox, plot.z - oz) < 6.5);
     if (!isTaken) {
-      return { x: plot.x, z: plot.z, rot: plot.rot };
+      return { x: plot.x, z: plot.z, rot: plot.rot, houseStyle: plot.houseStyle };
     }
   }
   const extraIdx = houses.length - STREET_PLOTS.length;
@@ -222,7 +243,7 @@ const server = http.createServer(async (req, res) => {
       username,
       privacyMap,
       rpg,
-      maxHouses: village.maxHouses || 40,
+      maxHouses: village.maxHouses || 48,
       claimedCount: village.residents.length,
     });
     return;
@@ -553,7 +574,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      const maxHouses = data.maxHouses || 40;
+      const maxHouses = data.maxHouses || 48;
       if (data.residents.length >= maxHouses) {
         return sendJson(res, 403, {
           error: `🔒 Bográcsfalva megtelt (${maxHouses}/${maxHouses} telek)! Új ház már nem építhető, de a meglévő lakók beléphetnek.`,
@@ -563,7 +584,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      const plot = findNextPlot(data.residents);
+      const plot = findNextPlot(data.residents, body.plot);
       const ROLES = [
         { title: 'A kocsmában segít', place: 'kocsma', cloth: '#c84b31' },
         { title: 'Vadász', place: 'vadaszhaz', cloth: '#3f7350' },
@@ -585,6 +606,7 @@ const server = http.createServer(async (req, res) => {
         x: plot.x,
         z: plot.z,
         rot: plot.rot,
+        houseStyle: typeof body.houseStyle === 'number' ? body.houseStyle : (plot.houseStyle ?? (data.residents.length % 5)),
         roof: body.roof || ROOFS[data.residents.length % ROOFS.length],
         wall: body.wall || '#f5eedc',
         cloth: body.cloth || chosenRole.cloth,
