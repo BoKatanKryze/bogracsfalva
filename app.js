@@ -698,7 +698,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261115-2';
+const APP_VERSION = '20261115-3';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -799,6 +799,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -811,7 +813,7 @@ scene.add(hemiLight);
 const sun = new THREE.DirectionalLight(0xfff0cf, 3.0);
 sun.position.set(-90, 120, -80);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1536, 1536);
 Object.assign(sun.shadow.camera, { left: -125, right: 125, top: 125, bottom: -125, near: 10, far: 350 });
 sun.shadow.bias = -0.0008;
 scene.add(sun);
@@ -828,24 +830,34 @@ function mat(hex) {
   }
   return matCache.get(key);
 }
-function box(w, h, d, color, x = 0, y = 0, z = 0) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+const geoCache = new Map();
+function cachedGeo(key, factory) {
+  if (!geoCache.has(key)) {
+    geoCache.set(key, factory());
+  }
+  return geoCache.get(key);
+}
+function box(w, h, d, color, x = 0, y = 0, z = 0, castShadow = false) {
+  const geo = cachedGeo(`box:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d));
+  const m = new THREE.Mesh(geo, mat(color));
   m.position.set(x, y, z);
-  m.castShadow = true;
+  m.castShadow = castShadow;
   m.receiveShadow = true;
   return m;
 }
-function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 8) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(color));
+function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 8, castShadow = false) {
+  const geo = cachedGeo(`cyl:${rt}:${rb}:${h}:${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg));
+  const m = new THREE.Mesh(geo, mat(color));
   m.position.set(x, y, z);
-  m.castShadow = true;
+  m.castShadow = castShadow;
   m.receiveShadow = true;
   return m;
 }
-function cone(r, h, color, x = 0, y = 0, z = 0, seg = 7) {
-  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat(color));
+function cone(r, h, color, x = 0, y = 0, z = 0, seg = 7, castShadow = false) {
+  const geo = cachedGeo(`cone:${r}:${h}:${seg}`, () => new THREE.ConeGeometry(r, h, seg));
+  const m = new THREE.Mesh(geo, mat(color));
   m.position.set(x, y, z);
-  m.castShadow = true;
+  m.castShadow = castShadow;
   m.receiveShadow = true;
   return m;
 }
@@ -977,31 +989,41 @@ function buildOptimizedEnvironment() {
   envRefs.bankMat = bankMat;
   envRefs.waterMat = waterMat;
 
+  const dummy = new THREE.Object3D();
   const riverSegs = 110;
+  const bankInst = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(4.4, 0.06, RIVER_HALF_WIDTH * 2 + 1.8),
+    bankMat,
+    riverSegs
+  );
+  bankInst.receiveShadow = true;
+  const waterInst = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(4.4, 0.12, RIVER_HALF_WIDTH * 2),
+    waterMat,
+    riverSegs
+  );
+  waterInst.receiveShadow = true;
+
   for (let i = 0; i < riverSegs; i++) {
     const x1 = -220 + (i / riverSegs) * 440;
     const x2 = -220 + ((i + 1) / riverSegs) * 440;
     const xm = (x1 + x2) / 2;
     const zm = riverZ(xm);
     const angle = Math.atan2(riverZ(x2) - riverZ(x1), x2 - x1);
-    const bank = new THREE.Mesh(
-      new THREE.BoxGeometry(4.4, 0.06, RIVER_HALF_WIDTH * 2 + 1.8),
-      bankMat
-    );
-    bank.position.set(xm, 0.01, zm);
-    bank.rotation.y = -angle;
-    bank.receiveShadow = true;
-    scene.add(bank);
 
-    const water = new THREE.Mesh(
-      new THREE.BoxGeometry(4.4, 0.12, RIVER_HALF_WIDTH * 2),
-      waterMat
-    );
-    water.position.set(xm, 0.03, zm);
-    water.rotation.y = -angle;
-    water.receiveShadow = true;
-    scene.add(water);
+    dummy.scale.set(1, 1, 1);
+    dummy.rotation.set(0, -angle, 0);
+    dummy.position.set(xm, 0.01, zm);
+    dummy.updateMatrix();
+    bankInst.setMatrixAt(i, dummy.matrix);
+
+    dummy.position.set(xm, 0.03, zm);
+    dummy.updateMatrix();
+    waterInst.setMatrixAt(i, dummy.matrix);
   }
+  bankInst.instanceMatrix.needsUpdate = true;
+  waterInst.instanceMatrix.needsUpdate = true;
+  scene.add(bankInst, waterInst);
 
   // Falusi Úthálózat kiépítése
   const roadMat = new THREE.MeshLambertMaterial({ color: 0xc8b082, flatShading: true });
@@ -1075,7 +1097,6 @@ function buildOptimizedEnvironment() {
     scene.add(lamp);
   }
 
-  const dummy = new THREE.Object3D();
   const colorHelper = new THREE.Color();
 
   const isSpotFree = (x, z) => {
@@ -1298,10 +1319,10 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
 
   // A) Tavasz / Nyár / Ősz: Díszes kőkút a Főtér közepén
   foterRegularGroup = new THREE.Group();
-  foterRegularGroup.add(cyl(1.45, 1.55, 0.48, 0x8b857c, 0, 0.28, 0, 12));
+  foterRegularGroup.add(cyl(1.45, 1.55, 0.48, 0x8b857c, 0, 0.28, 0, 12, true));
   foterRegularGroup.add(cyl(1.2, 1.2, 0.44, 0x4ea5d9, 0, 0.32, 0, 12));
-  foterRegularGroup.add(cyl(0.28, 0.36, 1.65, 0x8b857c, 0, 1.0, 0, 8));
-  foterRegularGroup.add(cyl(0.68, 0.38, 0.26, 0x8b857c, 0, 1.75, 0, 10));
+  foterRegularGroup.add(cyl(0.28, 0.36, 1.65, 0x8b857c, 0, 1.0, 0, 8, true));
+  foterRegularGroup.add(cyl(0.68, 0.38, 0.26, 0x8b857c, 0, 1.75, 0, 10, true));
   foterRegularGroup.add(cone(0.28, 0.55, 0x88d4ff, 0, 2.1, 0, 8));
   g.add(foterRegularGroup);
 
@@ -1312,11 +1333,11 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   // 1) Karácsonyfa a Főtér bal-hátsó részén (-1.25, 0, -0.85)
   const xmasTree = new THREE.Group();
   xmasTree.position.set(-1.25, 0.08, -0.85);
-  xmasTree.add(cyl(0.28, 0.36, 1.2, 0x5a3a22, 0, 0.6, 0, 8));
-  xmasTree.add(cone(1.9, 2.0, 0x225c36, 0, 1.6, 0, 9));
-  xmasTree.add(cone(1.55, 1.8, 0x2a6f42, 0, 2.65, 0, 9));
-  xmasTree.add(cone(1.18, 1.5, 0x225c36, 0, 3.6, 0, 9));
-  xmasTree.add(cone(0.78, 1.2, 0x2a6f42, 0, 4.4, 0, 9));
+  xmasTree.add(cyl(0.28, 0.36, 1.2, 0x5a3a22, 0, 0.6, 0, 8, true));
+  xmasTree.add(cone(1.9, 2.0, 0x225c36, 0, 1.6, 0, 9, true));
+  xmasTree.add(cone(1.55, 1.8, 0x2a6f42, 0, 2.65, 0, 9, true));
+  xmasTree.add(cone(1.18, 1.5, 0x225c36, 0, 3.6, 0, 9, true));
+  xmasTree.add(cone(0.78, 1.2, 0x2a6f42, 0, 4.4, 0, 9, true));
 
   // Csúcsdísz (ragyogó arany csillag)
   xmasStarMesh = new THREE.Mesh(
@@ -1394,7 +1415,7 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   const g = new THREE.Group();
   const len = BRIDGE.southZ - BRIDGE.northZ;
   g.position.set(BRIDGE.x, 0, (BRIDGE.southZ + BRIDGE.northZ) / 2);
-  g.add(box(3.4, 0.25, len, 0x8a5a33, 0, 0.45, 0));
+  g.add(box(3.4, 0.25, len, 0x8a5a33, 0, 0.45, 0, true));
   for (const side of [-1.55, 1.55]) {
     g.add(box(0.14, 0.12, len, 0x5a3a22, side, 1.15, 0));
     for (let z = -len / 2 + 0.5; z <= len / 2 - 0.5; z += 2.5) {
@@ -1408,7 +1429,7 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
 {
   const g = new THREE.Group();
   g.position.set(PLACES.kocsma.x, 0, PLACES.kocsma.z);
-  g.add(box(7.2, 2.8, 5.4, 0xf2e8cf, 0, 1.4, 0));
+  g.add(box(7.2, 2.8, 5.4, 0xf2e8cf, 0, 1.4, 0, true));
   const roof = new THREE.Mesh(new THREE.ConeGeometry(5.6, 2.6, 4), mat(0x9e3b24));
   roof.position.set(0, 4.1, 0);
   roof.rotation.y = Math.PI / 4;
@@ -1441,7 +1462,7 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
 {
   const g = new THREE.Group();
   g.position.set(PLACES.vadaszhaz.x, 0, PLACES.vadaszhaz.z);
-  g.add(box(6.0, 2.5, 4.8, 0x74482a, 0, 1.25, 0));
+  g.add(box(6.0, 2.5, 4.8, 0x74482a, 0, 1.25, 0, true));
   const roof = new THREE.Mesh(new THREE.ConeGeometry(4.8, 2.4, 4), mat(0x3b5e3c));
   roof.position.set(0, 3.7, 0);
   roof.rotation.y = Math.PI / 4;
@@ -1487,8 +1508,8 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   g.position.set(PLACES.piac.x, 0, PLACES.piac.z);
   const colors = [0xc8343a, 0xd99b26, 0x3f7350];
   [-3.2, 0, 3.2].forEach((dx, i) => {
-    g.add(box(2.4, 0.9, 1.4, 0x8a5a33, dx, 0.45, -1.5));
-    g.add(box(2.6, 0.25, 1.8, colors[i], dx, 2.1, -1.5));
+    g.add(box(2.4, 0.9, 1.4, 0x8a5a33, dx, 0.45, -1.5, true));
+    g.add(box(2.6, 0.25, 1.8, colors[i], dx, 2.1, -1.5, true));
     for (const sx of [-1.05, 1.05]) {
       g.add(box(0.1, 2.0, 0.1, 0x5a3a22, dx + sx, 1.05, -2.1));
       g.add(box(0.1, 2.0, 0.1, 0x5a3a22, dx + sx, 1.05, -0.9));
@@ -1514,8 +1535,8 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
 {
   const g = new THREE.Group();
   g.position.set(PLACES.malom.x, 0, PLACES.malom.z);
-  g.add(cyl(1.7, 2.4, 6.2, 0xf3ead6, 0, 3.1, 0, 8));
-  g.add(cone(2.0, 1.8, 0x8c4a27, 0, 7.1, 0, 8));
+  g.add(cyl(1.7, 2.4, 6.2, 0xf3ead6, 0, 3.1, 0, 8, true));
+  g.add(cone(2.0, 1.8, 0x8c4a27, 0, 7.1, 0, 8, true));
   g.add(box(0.9, 1.6, 0.2, 0x5a3a22, 0, 0.8, 2.32));
 
   windmillBlades = new THREE.Group();
@@ -1524,8 +1545,8 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   for (let i = 0; i < 4; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i * Math.PI) / 2;
-    arm.add(box(0.14, 3.8, 0.1, 0x5a3a22, 0, 1.9, 0));
-    arm.add(box(0.65, 2.8, 0.04, 0xfff6e0, 0.32, 2.2, 0.04));
+    arm.add(box(0.14, 3.8, 0.1, 0x5a3a22, 0, 1.9, 0, true));
+    arm.add(box(0.65, 2.8, 0.04, 0xfff6e0, 0.32, 2.2, 0.04, true));
     windmillBlades.add(arm);
   }
   g.add(windmillBlades);
@@ -1536,10 +1557,10 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
 {
   const g = new THREE.Group();
   g.position.set(PLACES.gemeskut.x, 0, PLACES.gemeskut.z);
-  g.add(cyl(1.0, 1.0, 0.9, 0x8b857c, 0, 0.45, 0, 8));
+  g.add(cyl(1.0, 1.0, 0.9, 0x8b857c, 0, 0.45, 0, 8, true));
   g.add(cyl(0.75, 0.75, 0.92, 0x3a7ca5, 0, 0.46, 0, 8));
-  g.add(cyl(0.14, 0.18, 4.2, 0x5a3a22, -1.6, 2.1, 0, 6));
-  const beam = box(4.8, 0.14, 0.14, 0x74482a, -0.4, 4.1, 0);
+  g.add(cyl(0.14, 0.18, 4.2, 0x5a3a22, -1.6, 2.1, 0, 6, true));
+  const beam = box(4.8, 0.14, 0.14, 0x74482a, -0.4, 4.1, 0, true);
   beam.rotation.z = -0.25;
   g.add(beam);
   g.add(cyl(0.03, 0.03, 2.4, 0x8a5a33, 1.6, 2.4, 0, 4));
@@ -1716,6 +1737,7 @@ function applySeason(season) {
   }
 
   updateFogForWeatherAndSeason();
+  renderer.shadowMap.needsUpdate = true;
   if (typeof updateDaylight === 'function' && typeof currentSec === 'function') {
     updateDaylight(currentSec(), 0);
   }
@@ -1933,30 +1955,92 @@ function createHouseGroup(res) {
   return g;
 }
 
+const VILLAGER_GEOS = {
+  body: new THREE.CylinderGeometry(0.23, 0.30, 0.66, 7),
+  head: new THREE.SphereGeometry(0.26, 8, 6),
+  hatBrim: new THREE.CylinderGeometry(0.42, 0.42, 0.06, 8),
+  hatTop: new THREE.CylinderGeometry(0.24, 0.27, 0.25, 8),
+  pants: new THREE.CylinderGeometry(0.08, 0.07, 0.36, 6),
+  boot: new THREE.BoxGeometry(0.13, 0.10, 0.21),
+  sleeve: new THREE.CylinderGeometry(0.07, 0.06, 0.36, 6),
+  hand: new THREE.SphereGeometry(0.07, 6, 5),
+};
+
 function createVillagerGroup(res) {
   const g = new THREE.Group();
   const clothMat = new THREE.MeshLambertMaterial({ color: res.cloth || '#c8343a', flatShading: true });
 
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 1.05, 7), clothMat);
-  body.position.y = 0.55;
+  const body = new THREE.Mesh(VILLAGER_GEOS.body, clothMat);
+  body.position.y = 0.75;
   body.castShadow = true;
   g.add(body);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), mat(0xf4cbb2));
-  head.position.y = 1.32;
+  const head = new THREE.Mesh(VILLAGER_GEOS.head, mat(0xf4cbb2));
+  head.position.y = 1.30;
   head.castShadow = true;
   g.add(head);
 
-  const hatBrim = cyl(0.42, 0.42, 0.06, 0x3b2818, 0, 1.52, 0, 8);
-  const hatTop = cyl(0.24, 0.27, 0.25, 0x3b2818, 0, 1.65, 0, 8);
+  const hatBrim = new THREE.Mesh(VILLAGER_GEOS.hatBrim, mat(0x3b2818));
+  hatBrim.position.y = 1.50;
+  const hatTop = new THREE.Mesh(VILLAGER_GEOS.hatTop, mat(0x3b2818));
+  hatTop.position.y = 1.63;
   g.add(hatBrim, hatTop);
 
-  g.userData = { clothMat, resident: res };
+  const createLegPivot = (x) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.44, 0);
+    const pants = new THREE.Mesh(VILLAGER_GEOS.pants, mat(0x3e352f));
+    pants.position.y = -0.18;
+    const boot = new THREE.Mesh(VILLAGER_GEOS.boot, mat(0x261a10));
+    boot.position.set(0, -0.38, 0.03);
+    pivot.add(pants, boot);
+    g.add(pivot);
+    return pivot;
+  };
+  const leftLegPivot = createLegPivot(-0.11);
+  const rightLegPivot = createLegPivot(0.11);
+
+  const createArmPivot = (x) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.98, 0);
+    const sleeve = new THREE.Mesh(VILLAGER_GEOS.sleeve, clothMat);
+    sleeve.position.y = -0.16;
+    const hand = new THREE.Mesh(VILLAGER_GEOS.hand, mat(0xf4cbb2));
+    hand.position.y = -0.36;
+    pivot.add(sleeve, hand);
+    g.add(pivot);
+    return pivot;
+  };
+  const leftArmPivot = createArmPivot(-0.29);
+  const rightArmPivot = createArmPivot(0.29);
+
+  g.userData = {
+    clothMat,
+    resident: res,
+    limbs: { leftLegPivot, rightLegPivot, leftArmPivot, rightArmPivot },
+  };
   body.userData.residentFigure = res;
   head.userData.residentFigure = res;
   figurePickers.push(body, head);
   scene.add(g);
   return g;
+}
+
+function animateCharacterLimbs(figGroup, phase, speedNorm) {
+  const limbs = figGroup?.userData?.limbs;
+  if (!limbs) return;
+  const { leftLegPivot, rightLegPivot, leftArmPivot, rightArmPivot } = limbs;
+  const targetSwing = speedNorm > 0.02
+    ? Math.sin(phase) * 0.72 * Math.min(1.25, speedNorm)
+    : 0;
+  const current = leftLegPivot.rotation.x;
+  const swing = speedNorm > 0.02
+    ? THREE.MathUtils.lerp(current, targetSwing, 0.42)
+    : (Math.abs(current) < 0.004 ? 0 : current * 0.75);
+  leftLegPivot.rotation.x = swing;
+  rightLegPivot.rotation.x = -swing;
+  leftArmPivot.rotation.x = -swing * 0.85;
+  rightArmPivot.rotation.x = swing * 0.85;
 }
 
 function updatePlotCapacityUI() {
@@ -2022,6 +2106,7 @@ function addResidentToWorld(raw) {
     housePrivacyMap[res.name.toLowerCase()] = 'public';
   }
   updatePlotCapacityUI();
+  renderer.shadowMap.needsUpdate = true;
   return res;
 }
 
@@ -2360,6 +2445,7 @@ const LIGHT_KEYFRAMES = [
 ];
 const tmpColorA = new THREE.Color();
 const tmpColorB = new THREE.Color();
+let lastShadowSunIntensity = -1;
 
 function updateDaylight(sec, outsideCount) {
   const hour = sec / HOUR;
@@ -2381,6 +2467,10 @@ function updateDaylight(sec, outsideCount) {
 
   sun.color.copy(tmpColorA.setHex(a.sun)).lerp(tmpColorB.setHex(b.sun), k);
   sun.intensity = a.power + (b.power - a.power) * k;
+  if (Math.abs(sun.intensity - lastShadowSunIntensity) > 0.04) {
+    lastShadowSunIntensity = sun.intensity;
+    renderer.shadowMap.needsUpdate = true;
+  }
 
   scene.background.copy(tmpColorA.setHex(aBg)).lerp(tmpColorB.setHex(bBg), k);
   const fireBase = a.fire + (b.fire - a.fire) * k;
@@ -2401,7 +2491,12 @@ function updateDaylight(sec, outsideCount) {
 
   const hh = String(Math.floor(hour)).padStart(2, '0');
   const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
-  el('clock-text').textContent = `${hh}:${mm} · ${outsideCount} lakos van kint`;
+  const clockEl = el('clock-text');
+  const nextClockText = `${hh}:${mm} · ${outsideCount} lakos van kint`;
+  if (clockEl._lastClockText !== nextClockText) {
+    clockEl._lastClockText = nextClockText;
+    clockEl.textContent = nextClockText;
+  }
 }
 
 // --- 9. 3D SZOBA BELSŐ NÉZET (Interior Scene) ---
@@ -2556,6 +2651,7 @@ function rebuildRoom3D() {
     }
     furnitureGroup.add(model);
   }
+  renderer.shadowMap.needsUpdate = true;
 }
 
 function renderRoomEditorUI() {
@@ -2743,6 +2839,7 @@ async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
   rebuildRoom3D();
   renderRoomEditorUI();
   syncResponsiveUIState();
+  renderer.shadowMap.needsUpdate = true;
 }
 
 function exitRoomInterior() {
@@ -2761,6 +2858,7 @@ function exitRoomInterior() {
   el('cam-widget').hidden = false;
   el('labels').hidden = false;
   syncResponsiveUIState();
+  renderer.shadowMap.needsUpdate = true;
 }
 
 el('room-exit-btn').addEventListener('click', exitRoomInterior);
@@ -4764,32 +4862,19 @@ function setWalker(on) {
     closeCard();
     closeAllDrawers();
     if (el('search-dropdown')) el('search-dropdown').hidden = true;
-    let spawnX = controls.target.x;
-    let spawnZ = controls.target.z;
-    let spawnHeading = Math.PI;
-
-    // Ha egy házhoz közel vagyunk vagy kijelölt háznál indítjuk a sétát, a ház ajtaja elé a járdára spawnolunk!
-    for (const r of residents) {
-      if (Math.hypot(spawnX - r.x, spawnZ - r.z) < 4.5) {
-        const rot = r.rot || 0;
-        spawnX = r.x + Math.sin(rot) * 2.85;
-        spawnZ = r.z + Math.cos(rot) * 2.85;
-        spawnHeading = rot;
-        break;
-      }
-    }
-
-    const startY = getGroundHeight(spawnX, spawnZ);
+    const spawn = findSafeWalkSpawn(controls.target.x, controls.target.z, camAzimuth + Math.PI);
+    const startY = getGroundHeight(spawn.x, spawn.z);
     walker = {
-      x: spawnX,
-      z: spawnZ,
+      x: spawn.x,
+      z: spawn.z,
       y: startY,
-      heading: spawnHeading,
-      camYaw: spawnHeading,
+      heading: spawn.heading,
+      camYaw: spawn.heading,
       camPitch: 0.14,
       step: 0,
     };
     playerMesh.visible = true;
+    animateCharacterLimbs(playerMesh, 0, 0);
     controls.enabled = false;
     document.body.classList.add('walk-mode');
     el('walk-hud').hidden = false;
@@ -4804,6 +4889,7 @@ function setWalker(on) {
     setView(walker.x, walker.z, 42);
     walker = null;
     playerMesh.visible = false;
+    animateCharacterLimbs(playerMesh, 0, 0);
     controls.enabled = true;
     document.body.classList.remove('walk-mode');
     el('walk-hud').hidden = true;
@@ -5049,7 +5135,7 @@ window.addEventListener('blur', () => {
 });
 
 // --- 12.5 Ütközéskezelés (Collision Detection) és Automatikus Lépcsőzés (Auto-Stepping) ---
-function getGroundHeight(x, z) {
+function getGroundHeight(x, z, includeProps = true) {
   // 1. Fahíd (Bridge) átívelése a folyó felett
   if (Math.abs(x - BRIDGE.x) < 2.0 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8) {
     const t = Math.max(0, Math.min(1, (z - BRIDGE.northZ) / (BRIDGE.southZ - BRIDGE.northZ)));
@@ -5061,26 +5147,32 @@ function getGroundHeight(x, z) {
   const distFoter = Math.hypot(x - PLACES.tuz.x, z - PLACES.tuz.z);
   if (distFoter < 5.2) {
     // Főtéri padok (6 db pad r=3.95 távolságban, felmehet rá a karakter!)
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const bx = PLACES.tuz.x + Math.cos(a) * 3.95;
-      const bz = PLACES.tuz.z + Math.sin(a) * 3.95;
-      const dx = x - bx;
-      const dz = z - bz;
-      const lx = dx * Math.sin(a) - dz * Math.cos(a);
-      const lz = dx * Math.cos(a) + dz * Math.sin(a);
-      if (Math.abs(lx) < 0.95 && Math.abs(lz) < 0.32) {
-        return 0.41; // Felment a padra!
+    if (includeProps && distFoter > 2.8) {
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const bx = PLACES.tuz.x + Math.cos(a) * 3.95;
+        const bz = PLACES.tuz.z + Math.sin(a) * 3.95;
+        const dx = x - bx;
+        const dz = z - bz;
+        const lx = dx * Math.sin(a) - dz * Math.cos(a);
+        const lz = dx * Math.cos(a) + dz * Math.sin(a);
+        if (Math.abs(lx) < 0.95 && Math.abs(lz) < 0.32) {
+          return 0.41; // Felment a padra!
+        }
       }
     }
     if (distFoter < 3.7) return 0.12; // Belső díszkör
     if (distFoter < 4.8) return 0.10; // Külső burkolat
   }
 
-  // 3. Folyóparti kövek (river rocks)
-  if (Array.isArray(envRefs.rocks)) {
+  if (!includeProps) return 0.0;
+
+  // 3. Folyóparti kövek (river rocks) — csak a folyó közelében vizsgáljuk
+  if (Array.isArray(envRefs.rocks) && Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH + 3.8) {
     for (const r of envRefs.rocks) {
-      if (Math.hypot(x - r.x, z - r.z) < r.radius) {
+      const dx = x - r.x;
+      const dz = z - r.z;
+      if (dx * dx + dz * dz < r.radius * r.radius) {
         return r.height; // Felmegy a kőre!
       }
     }
@@ -5090,7 +5182,9 @@ function getGroundHeight(x, z) {
   for (const r of residents) {
     const stepX = r.x + Math.sin(r.rot || 0) * 2.15;
     const stepZ = r.z + Math.cos(r.rot || 0) * 2.15;
-    if (Math.hypot(x - stepX, z - stepZ) < 0.85) {
+    const dx = x - stepX;
+    const dz = z - stepZ;
+    if (dx * dx + dz * dz < 0.85 * 0.85) {
       return 0.12;
     }
   }
@@ -5122,12 +5216,17 @@ function isObstacleBlocked(x, z, radius = 0.45) {
     }
   }
 
-  // B) Nagyobb nevezetes épületek
-  if (Math.abs(x - 18) < 3.5 + radius && Math.abs(z - 12) < 2.8 + radius) return true; // Kocsma épület (18, 12)
-  if (Math.abs(x - (-36)) < 3.4 + radius && Math.abs(z - (-34)) < 3.0 + radius) return true; // Vadászház (-36, -34)
-  if (Math.hypot(x - 38, z - 34) < 2.3 + radius) return true; // Szélmalom
-  if (Math.hypot(x - PLACES.tuz.x, z - PLACES.tuz.z) < 1.55 + radius) return true; // Főtér kút/tűz középpont
-  if (Math.hypot(x - (-18), z - (-8)) < 1.25 + radius) return true; // Gémekút
+  // B) Nagyobb nevezetes épületek és Főtér középpont (télen karácsonyfa + tábortűz, különben díszkút)
+  if (Math.abs(x - PLACES.kocsma.x) < 3.5 + radius && Math.abs(z - PLACES.kocsma.z) < 2.8 + radius) return true;
+  if (Math.abs(x - PLACES.vadaszhaz.x) < 3.4 + radius && Math.abs(z - PLACES.vadaszhaz.z) < 3.0 + radius) return true;
+  if (Math.hypot(x - PLACES.malom.x, z - PLACES.malom.z) < 2.3 + radius) return true;
+  if (Math.hypot(x - PLACES.gemeskut.x, z - PLACES.gemeskut.z) < 1.25 + radius) return true;
+  if (currentSeason === 'tel') {
+    if (Math.hypot(x - (PLACES.tuz.x - 1.25), z - (PLACES.tuz.z - 0.85)) < 1.3 + radius) return true;
+    if (Math.hypot(x - (PLACES.tuz.x + 1.35), z - (PLACES.tuz.z + 0.85)) < 1.0 + radius) return true;
+  } else if (Math.hypot(x - PLACES.tuz.x, z - PLACES.tuz.z) < 1.55 + radius) {
+    return true;
+  }
 
   // C) Folyó mély vize (csak a fahídon lehet átkelni, a víz blokkolva van)
   const inRiver = Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH - 0.2;
@@ -5138,6 +5237,48 @@ function isObstacleBlocked(x, z, radius = 0.45) {
   if (Math.abs(x) > 190 || Math.abs(z) > 190) return true;
 
   return false;
+}
+
+function findSafeWalkSpawn(rawX, rawZ, defaultHeading = Math.PI) {
+  let candX = rawX;
+  let candZ = rawZ;
+  let heading = defaultHeading;
+
+  // Ha egy házhoz közel vagyunk, a ház ajtaja elé a járdára spawnolunk!
+  for (const r of residents) {
+    if (Math.hypot(rawX - r.x, rawZ - r.z) < 4.5) {
+      const rot = r.rot || 0;
+      candX = r.x + Math.sin(rot) * 3.05;
+      candZ = r.z + Math.cos(rot) * 3.05;
+      heading = rot;
+      break;
+    }
+  }
+
+  // Ha a Főtér közepén/közelében indítjuk (pl. induláskor), a déli sétányra állítjuk
+  if (Math.hypot(candX - PLACES.tuz.x, candZ - PLACES.tuz.z) < 2.8) {
+    candX = PLACES.tuz.x;
+    candZ = PLACES.tuz.z + 3.1;
+  }
+
+  if (!isObstacleBlocked(candX, candZ, 0.55)) {
+    return { x: candX, z: candZ, heading };
+  }
+
+  // Kifelé irányuló gyűrűs keresés a legközelebbi garantáltan járható pontig
+  for (let r = 0.75; r <= 14.0; r += 0.75) {
+    for (let i = 0; i < 16; i++) {
+      const ang = (i / 16) * Math.PI * 2;
+      const cx = candX + Math.cos(ang) * r;
+      const cz = candZ + Math.sin(ang) * r;
+      if (!isObstacleBlocked(cx, cz, 0.55)) {
+        return { x: cx, z: cz, heading };
+      }
+    }
+  }
+
+  const roadPt = getClosestPointOnRoads(rawX, rawZ);
+  return { x: roadPt.x, z: roadPt.z, heading };
 }
 
 function resolveWalkerMovement(cx, cz, nx, nz, radius = 0.45) {
@@ -5166,6 +5307,12 @@ function lerpAngle(current, target, alpha) {
 const walkCamTarget = new THREE.Vector3();
 
 function updateWalker(dt) {
+  if (isObstacleBlocked(walker.x, walker.z, 0.42)) {
+    const safe = findSafeWalkSpawn(walker.x, walker.z, walker.heading);
+    walker.x = safe.x;
+    walker.z = safe.z;
+  }
+
   const has = (...codes) => codes.some((c) => pressedKeys.has(c));
   const joyActive = joyState.pointerId !== null && joyState.normDist > 0;
   let isMoving = false;
@@ -5240,9 +5387,10 @@ function updateWalker(dt) {
   const targetY = getGroundHeight(walker.x, walker.z);
   walker.y = THREE.MathUtils.lerp(walker.y !== undefined ? walker.y : targetY, targetY, Math.min(1, dt * 14));
 
-  const bob = isMoving ? Math.abs(Math.sin(walker.step)) * 0.14 : 0;
+  const bob = isMoving ? Math.abs(Math.sin(walker.step)) * 0.06 : 0;
   playerMesh.position.set(walker.x, walker.y + bob, walker.z);
   playerMesh.rotation.y = walker.heading;
+  animateCharacterLimbs(playerMesh, walker.step, isMoving ? moveSpeed / MAX_WALK_SPEED : 0);
 
   const pitch = walker.camPitch ?? 0.14;
   const camDist = 6.5;
@@ -5589,17 +5737,39 @@ const personTagPool = Array.from({ length: 12 }, () => {
   return tag;
 });
 
+function setTagHidden(tag, hidden) {
+  if (tag._lastHidden !== hidden || tag.hidden !== hidden) {
+    tag._lastHidden = hidden;
+    tag.hidden = hidden;
+  }
+}
+
+function setTagText(tag, text) {
+  if (tag._lastText !== text) {
+    tag._lastText = text;
+    tag.textContent = text;
+  }
+}
+
 const projVec = new THREE.Vector3();
 function projectToScreen(tag, x, y, z) {
   projVec.set(x, y, z).project(camera);
   if (Math.abs(projVec.x) > 1 || Math.abs(projVec.y) > 1 || projVec.z > 1) {
-    tag.hidden = true;
+    setTagHidden(tag, true);
     return false;
   }
   const px = (projVec.x * 0.5 + 0.5) * window.innerWidth;
   const py = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
-  tag.hidden = false;
-  tag.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+  setTagHidden(tag, false);
+  if (
+    tag._lastTx === undefined ||
+    Math.abs(px - tag._lastTx) >= 0.5 ||
+    Math.abs(py - tag._lastTy) >= 0.5
+  ) {
+    tag._lastTx = px;
+    tag._lastTy = py;
+    tag.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) translate(-50%, -100%)`;
+  }
   return true;
 }
 
@@ -5608,14 +5778,14 @@ function updateMyHomePointer(t) {
   const myTag = el('my-home-tag');
   const compassBtn = el('home-compass-pointer');
   if (!currentConnectedUser || inRoomMode) {
-    myTag.hidden = true;
-    compassBtn.hidden = true;
+    setTagHidden(myTag, true);
+    setTagHidden(compassBtn, true);
     return;
   }
   const myRes = byName.get(currentConnectedUser.toLowerCase());
   if (!myRes) {
-    myTag.hidden = true;
-    compassBtn.hidden = true;
+    setTagHidden(myTag, true);
+    setTagHidden(compassBtn, true);
     return;
   }
 
@@ -5633,24 +5803,39 @@ function updateMyHomePointer(t) {
 
   const onScreen = Math.abs(projVec.x) <= 0.94 && Math.abs(projVec.y) <= 0.88 && projVec.z <= 1;
   if (onScreen) {
-    compassBtn.hidden = true;
-    myTag.hidden = false;
-    myTag.textContent = `🏠 Saját házam (@${myRes.name})`;
+    setTagHidden(compassBtn, true);
+    setTagHidden(myTag, false);
+    setTagText(myTag, `🏠 Saját házam (@${myRes.name})`);
     const px = (projVec.x * 0.5 + 0.5) * window.innerWidth;
     const py = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
-    myTag.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+    if (
+      myTag._lastTx === undefined ||
+      Math.abs(px - myTag._lastTx) >= 0.5 ||
+      Math.abs(py - myTag._lastTy) >= 0.5
+    ) {
+      myTag._lastTx = px;
+      myTag._lastTy = py;
+      myTag.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) translate(-50%, -100%)`;
+    }
   } else {
     // Ha a saját ház kívül van a képernyőn, a képernyő szélére tesszük az iránytű gombot!
-    myTag.hidden = true;
-    compassBtn.hidden = false;
+    setTagHidden(myTag, true);
+    setTagHidden(compassBtn, false);
     const angle = Math.atan2(-ndcY, ndcX);
     const marginX = window.innerWidth / 2 - 115;
     const marginY = window.innerHeight / 2 - 65;
-    const edgeX = window.innerWidth / 2 + Math.cos(angle) * marginX;
-    const edgeY = window.innerHeight / 2 + Math.sin(angle) * marginY;
-    compassBtn.style.left = `${edgeX.toFixed(0)}px`;
-    compassBtn.style.top = `${edgeY.toFixed(0)}px`;
-    compassBtn.textContent = `🏠 Saját házam (@${myRes.name}) erre ➔`;
+    const edgeX = Math.round(window.innerWidth / 2 + Math.cos(angle) * marginX);
+    const edgeY = Math.round(window.innerHeight / 2 + Math.sin(angle) * marginY);
+    const nextText = `🏠 Saját házam (@${myRes.name}) erre ➔`;
+    if (compassBtn._lastCompassText !== nextText) {
+      compassBtn._lastCompassText = nextText;
+      compassBtn.textContent = nextText;
+    }
+    if (compassBtn._lastCompassX !== edgeX || compassBtn._lastCompassY !== edgeY) {
+      compassBtn._lastCompassX = edgeX;
+      compassBtn._lastCompassY = edgeY;
+      compassBtn.style.transform = `translate3d(${edgeX.toFixed(0)}px, ${edgeY.toFixed(0)}px, 0) translate(-50%, -50%)`;
+    }
   }
 }
 
@@ -5679,6 +5864,10 @@ function tick(now) {
 
   if (inRoomMode) {
     roomControls.update();
+    if (frameCount % 6 === 0) {
+      renderer.shadowMap.needsUpdate = true;
+    }
+    frameCount++;
     renderer.render(roomScene, roomCamera);
     requestAnimationFrame(tick);
     return;
@@ -5703,7 +5892,8 @@ function tick(now) {
     const st = whereIs(selectedRes, sec);
     const camX = st.x - Math.sin(st.heading) * 6.0;
     const camZ = st.z - Math.cos(st.heading) * 6.0;
-    camera.position.lerp(new THREE.Vector3(camX, 3.2, camZ), Math.min(1, dt * 6));
+    walkCamTarget.set(camX, 3.2, camZ);
+    camera.position.lerp(walkCamTarget, Math.min(1, dt * 6));
     camera.lookAt(st.x, 1.3, st.z);
     controls.target.set(st.x, 0, st.z);
   } else {
@@ -5735,10 +5925,14 @@ function tick(now) {
     if (!isSleeping) outsideCount++;
 
     res.figureGroup.visible = !isSleeping || res === selectedRes;
-    const groundY = getGroundHeight(st.x, st.z);
-    const bob = st.mode === 'walk' ? Math.abs(Math.sin(t * 8.5 + i)) * 0.14 : 0;
+    const groundY = getGroundHeight(st.x, st.z, false);
+    const isWalking = st.mode === 'walk';
+    const bob = isWalking ? Math.abs(Math.sin(t * 8.5 + i)) * 0.06 : 0;
     res.figureGroup.position.set(st.x, groundY + bob, st.z);
     res.figureGroup.rotation.y = st.heading;
+    if (res.figureGroup.visible) {
+      animateCharacterLimbs(res.figureGroup, t * 8.5 + i, isWalking ? 0.95 : 0);
+    }
   }
 
   if (currentSeason === 'tel') {
@@ -5760,55 +5954,60 @@ function tick(now) {
     });
   }
 
-  updateMyHomePointer(t);
+  if (!(walker && isMobileViewport())) {
+    updateMyHomePointer(t);
 
-  const chosenTag = el('chosen-tag');
-  if (selectedRes && !el('diary-box').hidden) {
-    const st = whereIs(selectedRes, sec);
-    const tx = st.mode === 'home' ? selectedRes.x : st.x;
-    const tz = st.mode === 'home' ? selectedRes.z : st.z;
-    const ty = st.mode === 'home' ? 4.8 : 2.3;
-    pin.position.set(tx, ty + Math.sin(t * 4) * 0.15, tz);
-    chosenTag.textContent = `@${selectedRes.name}`;
-    projectToScreen(chosenTag, tx, ty + 0.9, tz);
-    if (followMode && !flight && !behindMode) {
-      const dist = camera.position.distanceTo(controls.target);
-      setView(
-        controls.target.x + (tx - controls.target.x) * 0.08,
-        controls.target.z + (tz - controls.target.z) * 0.08,
-        dist
-      );
+    const chosenTag = el('chosen-tag');
+    if (selectedRes && !el('diary-box').hidden) {
+      const st = whereIs(selectedRes, sec);
+      const tx = st.mode === 'home' ? selectedRes.x : st.x;
+      const tz = st.mode === 'home' ? selectedRes.z : st.z;
+      const ty = st.mode === 'home' ? 4.8 : 2.3;
+      pin.position.set(tx, ty + Math.sin(t * 4) * 0.15, tz);
+      setTagText(chosenTag, `@${selectedRes.name}`);
+      projectToScreen(chosenTag, tx, ty + 0.9, tz);
+      if (followMode && !flight && !behindMode) {
+        const dist = camera.position.distanceTo(controls.target);
+        setView(
+          controls.target.x + (tx - controls.target.x) * 0.08,
+          controls.target.z + (tz - controls.target.z) * 0.08,
+          dist
+        );
+      }
+    } else {
+      setTagHidden(chosenTag, true);
     }
-  } else {
-    chosenTag.hidden = true;
-  }
 
-  for (const { key, tag } of placeTags) {
-    const p = PLACES[key];
-    projectToScreen(tag, p.x, 4.8, p.z);
-  }
-  const camDist = camera.position.distanceTo(controls.target);
-  let usedTags = 0;
-  if (camDist < 68) {
-    for (const res of residents) {
-      if (usedTags >= personTagPool.length) break;
-      if (!res.figureGroup.visible || res === selectedRes) continue;
-      const d = Math.hypot(res.figureGroup.position.x - controls.target.x, res.figureGroup.position.z - controls.target.z);
-      if (d < 34) {
-        const tag = personTagPool[usedTags];
-        tag._res = res;
-        tag.textContent = `@${res.name}`;
-        if (projectToScreen(tag, res.figureGroup.position.x, 2.2, res.figureGroup.position.z)) {
-          usedTags++;
+    for (const { key, tag } of placeTags) {
+      const p = PLACES[key];
+      projectToScreen(tag, p.x, 4.8, p.z);
+    }
+    const camDist = camera.position.distanceTo(controls.target);
+    let usedTags = 0;
+    if (camDist < 68) {
+      for (const res of residents) {
+        if (usedTags >= personTagPool.length) break;
+        if (!res.figureGroup.visible || res === selectedRes) continue;
+        const d = Math.hypot(res.figureGroup.position.x - controls.target.x, res.figureGroup.position.z - controls.target.z);
+        if (d < 34) {
+          const tag = personTagPool[usedTags];
+          tag._res = res;
+          setTagText(tag, `@${res.name}`);
+          if (projectToScreen(tag, res.figureGroup.position.x, 2.2, res.figureGroup.position.z)) {
+            usedTags++;
+          }
         }
       }
     }
+    for (let i = usedTags; i < personTagPool.length; i++) setTagHidden(personTagPool[i], true);
   }
-  for (let i = usedTags; i < personTagPool.length; i++) personTagPool[i].hidden = true;
 
   if (frameCount % 15 === 0) {
     updateDaylight(sec, outsideCount);
     refreshCardLive(sec);
+  }
+  if (frameCount % 4 === 0) {
+    renderer.shadowMap.needsUpdate = true;
   }
   frameCount++;
   renderer.render(scene, camera);
