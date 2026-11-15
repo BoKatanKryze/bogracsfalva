@@ -112,54 +112,7 @@ function createStarterHouseLocal(username, index = 0, passwordHash = null) {
   };
 }
 
-// Utcafronti építési telkek (minden új ház közvetlenül a falusi utcákhoz csatlakozik, bejárattal az út felé!)
-const STREET_PLOTS = [
-  // Déli Főutca mentén (közvetlen kapcsolat a Főtérrel és a Déli úttal)
-  { x: -6.5, z: 23.5, rot: 1.57 },
-  { x: 6.5, z: 23.5, rot: -1.57 },
-  { x: -6.5, z: 36.5, rot: 1.57 },
-  { x: 6.5, z: 36.5, rot: -1.57 },
-  // Nyugati Vadász és Malom út mentén
-  { x: -22.0, z: 1.5, rot: 0.0 },
-  { x: -34.0, z: 1.5, rot: 0.0 },
-  // Keleti Kocsma és Horgász part út mentén
-  { x: 22.0, z: 1.5, rot: 0.0 },
-  { x: 34.0, z: 1.5, rot: 0.0 },
-  // Dél-Nyugati Betyár köz
-  { x: -35.0, z: 28.0, rot: 2.1 },
-  { x: -20.0, z: 44.0, rot: 2.8 },
-  // Dél-Keleti Piac és Méhész köz
-  { x: 36.0, z: 32.0, rot: -2.3 },
-  { x: 20.0, z: 44.0, rot: -2.8 },
-  // Északi Főutca (hídtól északra)
-  { x: -6.5, z: -26.0, rot: 1.57 },
-  { x: 6.5, z: -26.0, rot: -1.57 },
-  { x: -6.5, z: -38.0, rot: 1.57 },
-  { x: 6.5, z: -38.0, rot: -1.57 },
-  // Észak-Nyugati Vadon út
-  { x: -28.0, z: -32.0, rot: 0.8 },
-  { x: -44.0, z: -32.0, rot: 0.8 },
-  // Észak-Keleti Gyümölcsös út
-  { x: 24.0, z: -32.0, rot: -0.8 },
-  { x: 36.0, z: -38.0, rot: -0.8 },
-  // Déli Mezei utcavég
-  { x: 6.5, z: 46.0, rot: -1.57 },
-];
-
-function findNextPlotLocal(houses) {
-  const occupied = houses.map((h) => [h.x, h.z]);
-  for (const plot of STREET_PLOTS) {
-    const isTaken = occupied.some(([ox, oz]) => Math.hypot(plot.x - ox, plot.z - oz) < 6.5);
-    if (!isTaken) {
-      return { x: plot.x, z: plot.z, rot: plot.rot };
-    }
-  }
-  const extraIdx = houses.length - STREET_PLOTS.length;
-  const side = extraIdx % 2 === 0 ? 1 : -1;
-  const z = 52 + Math.floor(extraIdx / 2) * 10;
-  return { x: side * 6.5, z, rot: side > 0 ? -1.57 : 1.57 };
-}
-
+// Az utcafronti telkek és a validátor lentebb, az úthálózat és PLACES után kerül deklarálásra.
 let cachedVillageData = null;
 
 function loadLocalDb() {
@@ -493,6 +446,7 @@ function handleLocalApi(urlStr, options = {}) {
       x: plot.x,
       z: plot.z,
       rot: plot.rot,
+      houseStyle: allRes.length % 5,
       roof: ROOFS[allRes.length % ROOFS.length],
       wall: '#f5eedc',
       cloth: chosenRole.cloth,
@@ -669,6 +623,237 @@ const PLACES = {
   },
 };
 const WORK_PLACES = ['tuz', 'kocsma', 'vadaszhaz', 'piac', 'steg', 'malom', 'legelo', 'gemeskut'];
+const PHYSICAL_PLACE_KEYS = ['tuz', 'kocsma', 'vadaszhaz', 'piac', 'steg', 'hid', 'malom', 'legelo', 'gemeskut'];
+
+// Városi 2 sávos úthálózat és járdarendszer konstansai (±3.375m, össz-szélesség 6.75m)
+const CAR_ROAD_WIDTH = 4.6;
+const SIDEWALK_WIDTH = 1.05;
+const SIDEWALK_OFFSET = 2.85;
+const MAX_NPC_SPEED = 4.5;
+
+const VILLAGE_ROADS = [
+  { id: 'main_bridge_s', x1: 0, z1: -8.5, x2: 0, z2: -1.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'main_south',    x1: 0, z1: 8.0,  x2: 0, z2: 58.0, width: CAR_ROAD_WIDTH, speedLimit: 50 },
+  { id: 'west_ave',      x1: -4.2, z1: 3.5, x2: -62.0, z2: 3.5, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'east_ave',      x1: 4.2,  z1: 3.5, x2: 60.0,  z2: 3.5, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'southwest_ave', x1: -2.3, z1: 20.0, x2: -60.0, z2: 20.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'south_cross_w', x1: -2.3, z1: 42.0, x2: -60.0, z2: 42.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'south_cross_e', x1: 2.3,  z1: 42.0, x2: 60.0,  z2: 42.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'main_north',    x1: 0, z1: -19.5, x2: 0, z2: -56.0, width: CAR_ROAD_WIDTH, speedLimit: 50 },
+  { id: 'northwest_ave', x1: -2.3, z1: -44.0, x2: -60.0, z2: -44.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+  { id: 'northeast_ave', x1: 2.3,  z1: -36.0, x2: 60.0,  z2: -36.0, width: CAR_ROAD_WIDTH, speedLimit: 30 },
+];
+
+function subtractInterval(intervals, cutStart, cutEnd) {
+  if (cutEnd <= cutStart) return intervals;
+  const out = [];
+  for (const [a, b] of intervals) {
+    if (cutEnd <= a || cutStart >= b) {
+      out.push([a, b]);
+    } else {
+      if (cutStart > a) out.push([a, cutStart]);
+      if (cutEnd < b) out.push([cutEnd, b]);
+    }
+  }
+  return out;
+}
+
+function buildSidewalkSegments() {
+  const segs = [];
+  for (const r of VILLAGE_ROADS) {
+    const dx = r.x2 - r.x1;
+    const dz = r.z2 - r.z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.01) continue;
+    const ux = dx / len;
+    const uz = dz / len;
+    const nx = -uz;
+    const nz = ux;
+    const isHoriz = Math.abs(dz) < 0.01;
+
+    for (const side of [-1, 1]) {
+      const ox = r.x1 + nx * side * SIDEWALK_OFFSET;
+      const oz = r.z1 + nz * side * SIDEWALK_OFFSET;
+      let intervals = [[0, len]];
+
+      // Vízszintes mellékutcáknál a járda álljon meg |x| = 3.38-nál a főút előtt
+      if (isHoriz && r.id !== 'west_ave' && r.id !== 'east_ave') {
+        const minX = Math.min(r.x1, r.x2);
+        const maxX = Math.max(r.x1, r.x2);
+        if (minX < 3.38 && maxX > -3.38) {
+          const tA = (ux > 0 ? (-3.38 - ox) : (3.38 - ox)) / ux;
+          const tB = (ux > 0 ? (3.38 - ox) : (-3.38 - ox)) / ux;
+          intervals = subtractInterval(intervals, Math.min(tA, tB), Math.max(tA, tB));
+        }
+      }
+
+      // Főúti kereszteződéseknél szakítsuk meg a járdát, ahol mellékutca csatlakozik
+      for (const other of VILLAGE_ROADS) {
+        if (other.id === r.id) continue;
+        const odx = other.x2 - other.x1;
+        const odz = other.z2 - other.z1;
+        const olen = Math.hypot(odx, odz);
+        if (olen < 0.01) continue;
+        const oux = odx / olen;
+        const ouz = odz / olen;
+        if (Math.abs(ux * oux + uz * ouz) > 0.25) continue; // csak merőleges kereszteződés
+
+        const relX = ox - other.x1;
+        const relZ = oz - other.z1;
+        // Metszéspont a két egyenes között: ox + ux*t = other.x1 + oux*s
+        const denom = ux * ouz - uz * oux;
+        if (Math.abs(denom) < 1e-4) continue;
+        const tHit = (-(relX * ouz - relZ * oux)) / denom;
+        const sHit = (-(relX * uz - relZ * ux)) / denom;
+        if (sHit >= -0.6 && sHit <= olen + 0.6) {
+          const halfW = (other.width || CAR_ROAD_WIDTH) / 2;
+          intervals = subtractInterval(intervals, tHit - halfW, tHit + halfW);
+        }
+      }
+
+      for (const [a, b] of intervals) {
+        if (b - a < 0.4) continue;
+        segs.push({
+          roadId: r.id,
+          side,
+          x1: ox + ux * a,
+          z1: oz + uz * a,
+          x2: ox + ux * b,
+          z2: oz + uz * b,
+          ux,
+          uz,
+          nx,
+          nz,
+          len: b - a,
+        });
+      }
+    }
+  }
+  return segs;
+}
+
+const SIDEWALK_SEGMENTS = buildSidewalkSegments();
+
+function getClosestPointOnRoads(px, pz) {
+  const pIsNorth = pz < riverZ(px);
+  let closestX = 0, closestZ = 0, minDistSq = Infinity, closestRoad = null;
+  let fbX = 0, fbZ = 0, fbDistSq = Infinity, fbRoad = null;
+
+  for (const r of VILLAGE_ROADS) {
+    const dx = r.x2 - r.x1;
+    const dz = r.z2 - r.z1;
+    const lenSq = dx * dx + dz * dz;
+    if (lenSq === 0) continue;
+    const u = Math.max(0, Math.min(1, ((px - r.x1) * dx + (pz - r.z1) * dz) / lenSq));
+    const nx = r.x1 + u * dx;
+    const nz = r.z1 + u * dz;
+    const distSq = (px - nx) * (px - nx) + (pz - nz) * (pz - nz);
+    if (distSq < fbDistSq) {
+      fbDistSq = distSq;
+      fbX = nx;
+      fbZ = nz;
+      fbRoad = r;
+    }
+    if ((nz < riverZ(nx)) !== pIsNorth) continue;
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      closestX = nx;
+      closestZ = nz;
+      closestRoad = r;
+    }
+  }
+  if (!closestRoad) {
+    return { x: fbX, z: fbZ, dist: Math.sqrt(fbDistSq), road: fbRoad };
+  }
+  return { x: closestX, z: closestZ, dist: Math.sqrt(minDistSq), road: closestRoad };
+}
+
+function getClosestSidewalkPoint(px, pz) {
+  const pIsNorth = pz < riverZ(px);
+  let bestX = 0, bestZ = 0, minDistSq = Infinity, bestSeg = null;
+  for (const seg of SIDEWALK_SEGMENTS) {
+    const dx = seg.x2 - seg.x1;
+    const dz = seg.z2 - seg.z1;
+    const lenSq = dx * dx + dz * dz;
+    if (lenSq === 0) continue;
+    const u = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (pz - seg.z1) * dz) / lenSq));
+    const nx = seg.x1 + u * dx;
+    const nz = seg.z1 + u * dz;
+    if ((nz < riverZ(nx)) !== pIsNorth) continue;
+    const distSq = (px - nx) * (px - nx) + (pz - nz) * (pz - nz);
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      bestX = nx;
+      bestZ = nz;
+      bestSeg = seg;
+    }
+  }
+  if (!bestSeg) {
+    const nr = getClosestPointOnRoads(px, pz);
+    return { x: nr.x, z: nr.z, dist: nr.dist, seg: null };
+  }
+  return { x: bestX, z: bestZ, dist: Math.sqrt(minDistSq), seg: bestSeg };
+}
+
+// Szigorú várostervezési telek-lista (min. 10m ház-távolság, 8.2m az úttól, >= 11.5m a folyótól, >= 10.5m PLACES-től)
+const STREET_PLOTS = [
+  { x: -34, z: 11.7, rot: 3.1416 },
+  { x: -45, z: 11.7, rot: 3.1416 },
+  { x: -56, z: 11.7, rot: 3.1416 },
+  { x: -46, z: -4.7, rot: 0 },
+  { x: -57, z: -4.7, rot: 0 },
+  { x: -56, z: 28.2, rot: 3.1416 },
+  { x: -10, z: 50.2, rot: 3.1416 },
+  { x: -21, z: 50.2, rot: 3.1416 },
+  { x: -32, z: 50.2, rot: 3.1416 },
+  { x: -43, z: 50.2, rot: 3.1416 },
+  { x: -54, z: 50.2, rot: 3.1416 },
+  { x: 10, z: 50.2, rot: 3.1416 },
+  { x: 21, z: 50.2, rot: 3.1416 },
+  { x: 32, z: 50.2, rot: 3.1416 },
+  { x: 43, z: 50.2, rot: 3.1416 },
+  { x: 54, z: 50.2, rot: 3.1416 },
+  { x: -48, z: -35.8, rot: 3.1416 },
+  { x: -43, z: -52.2, rot: 0 },
+  { x: -54, z: -52.2, rot: 0 },
+  { x: 55, z: -27.8, rot: 3.1416 },
+  { x: 54, z: -44.2, rot: 0 },
+];
+
+function isPlotValid(x, z, occupied = []) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  for (const h of occupied) {
+    const hx = Array.isArray(h) ? h[0] : h.x;
+    const hz = Array.isArray(h) ? h[1] : h.z;
+    if (Math.hypot(x - hx, z - hz) < 9.5) return false;
+  }
+  if (getClosestPointOnRoads(x, z).dist < 6.8) return false;
+  if (Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH + 6.7) return false;
+  for (const key of PHYSICAL_PLACE_KEYS) {
+    const p = PLACES[key];
+    if (p && Math.hypot(x - p.x, z - p.z) < (p.r + 5.5)) return false;
+  }
+  return true;
+}
+
+function findNextPlotLocal(houses) {
+  const occupied = houses || [];
+  for (const plot of STREET_PLOTS) {
+    if (isPlotValid(plot.x, plot.z, occupied)) {
+      return { x: plot.x, z: plot.z, rot: plot.rot };
+    }
+  }
+  for (let idx = 0; idx < 120; idx++) {
+    const side = idx % 2 === 0 ? 1 : -1;
+    const row = Math.floor(idx / 2);
+    const candX = side * 8.2;
+    const candZ = 62 + row * 11;
+    if (isPlotValid(candX, candZ, occupied)) {
+      return { x: candX, z: candZ, rot: side > 0 ? -1.5708 : 1.5708 };
+    }
+  }
+  return { x: -66, z: 11.7, rot: 3.1416 };
+}
 
 // Keresőben megjelenő Menüpontok és Akciók listája (Munka, Pihenés, Bolt, Küldetések, Szoba stb.)
 const ACTION_MENU_ITEMS = [
@@ -698,7 +883,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261115-3';
+const APP_VERSION = '20261115-4';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -714,11 +899,23 @@ let playerRpg = null;
 // Ha statikus tárhelyen (pl. GitHub Pages) már mentettünk új lakost vagy ház-színezést a localStorage-ba, összefésüljük:
 {
   const localDb = loadLocalDb();
-  if (Array.isArray(localDb.extraResidents)) {
+  if (Array.isArray(localDb.extraResidents) && localDb.extraResidents.length) {
+    let migrated = false;
+    const occupied = [...villageData.residents];
     for (const extra of localDb.extraResidents) {
-      if (!villageData.residents.some((r) => r.name.toLowerCase() === extra.name.toLowerCase())) {
-        villageData.residents.push(extra);
+      if (villageData.residents.some((r) => r.name.toLowerCase() === extra.name.toLowerCase())) continue;
+      if (!isPlotValid(extra.x, extra.z, occupied)) {
+        const validPlot = findNextPlotLocal(occupied);
+        extra.x = validPlot.x;
+        extra.z = validPlot.z;
+        extra.rot = validPlot.rot;
+        migrated = true;
       }
+      occupied.push(extra);
+      villageData.residents.push(extra);
+    }
+    if (migrated) {
+      saveLocalDb(localDb);
     }
   }
   if (localDb.customizations) {
@@ -869,6 +1066,7 @@ const envRefs = {
   bankMat: null,
   waterMat: null,
   roadMat: null,
+  sidewalkMat: null,
   crownInst: null,
   pineInst: null,
   bushInst: null,
@@ -881,99 +1079,90 @@ const envRefs = {
   rocks: [],
 };
 
-// Falusi utcarendszer (Híd utca, Főutca, Vadász dűlő, Kocsma út, Betyár köz, Piac köz, Északi utak)
-// A házak sosem a falu útján állnak: a házak előtt tágas utcafront húzódik,
-// és minden egyes ház közvetlenül egy rövid, tetszetős járdával csatlakozik az utcához!
-const VILLAGE_ROADS = [
-  // 1. Főtér és Híd tengely (Híd utca)
-  { x1: 0, z1: 3.5, x2: 0, z2: -8.5, width: 3.2 },
-
-  // 2. Déli Főutca (x=0)
-  { x1: 0, z1: 3.5, x2: 0, z2: 20.0, width: 3.0 },
-  { x1: 0, z1: 20.0, x2: 0, z2: 36.0, width: 3.0 },
-  { x1: 0, z1: 36.0, x2: 0, z2: 50.0, width: 2.8 },
-
-  // 3. Dél-Nyugati Betyár dűlő
-  { x1: 0, z1: 20.0, x2: -11.0, z2: 20.0, width: 2.6 },
-  { x1: -11.0, z1: 20.0, x2: -19.0, z2: 24.0, width: 2.5 },
-  { x1: -19.0, z1: 24.0, x2: -28.0, z2: 30.0, width: 2.5 },
-  { x1: -28.0, z1: 30.0, x2: -31.0, z2: 44.0, width: 2.5 },
-  { x1: -31.0, z1: 44.0, x2: -16.0, z2: 46.0, width: 2.5 },
-  { x1: -16.0, z1: 46.0, x2: -4.0, z2: 38.0, width: 2.5 },
-  { x1: -4.0, z1: 38.0, x2: 0, z2: 36.0, width: 2.6 },
-
-  // 4. Nyugati Vadász és Vadon út
-  { x1: 0, z1: 3.5, x2: -14.0, z2: 3.5, width: 2.6 },
-  { x1: -14.0, z1: 3.5, x2: -28.0, z2: -1.0, width: 2.5 },
-  { x1: -28.0, z1: -1.0, x2: -38.0, z2: 4.0, width: 2.5 },
-  { x1: -38.0, z1: 4.0, x2: -48.0, z2: 4.0, width: 2.5 },
-  { x1: -48.0, z1: 4.0, x2: -54.0, z2: 4.0, width: 2.5 },
-  { x1: -14.0, z1: 3.5, x2: -11.0, z2: 20.0, width: 2.5 },
-
-  // 5. Dél-Keleti Piac és Kocsma körút
-  { x1: 0, z1: 20.0, x2: 12.0, z2: 20.0, width: 2.6 },
-  { x1: 12.0, z1: 20.0, x2: 20.0, z2: 25.0, width: 2.5 },
-  { x1: 20.0, z1: 25.0, x2: 30.0, z2: 32.0, width: 2.5 },
-  { x1: 30.0, z1: 32.0, x2: 40.0, z2: 32.0, width: 2.5 },
-  { x1: 40.0, z1: 32.0, x2: 52.0, z2: 30.0, width: 2.5 },
-  { x1: 52.0, z1: 30.0, x2: 52.0, z2: 16.0, width: 2.5 },
-  { x1: 30.0, z1: 32.0, x2: 32.0, z2: 46.0, width: 2.5 },
-  { x1: 32.0, z1: 46.0, x2: 14.0, z2: 46.0, width: 2.5 },
-  { x1: 14.0, z1: 46.0, x2: 4.0, z2: 38.0, width: 2.5 },
-  { x1: 4.0, z1: 38.0, x2: 0, z2: 36.0, width: 2.6 },
-
-  // 6. Keleti Horgász korzó és Kocsma bevezető út (kikerüli a Kocsmát: a korzó z=3.5-nél fut, a Kocsma épülete z=12-nél van!)
-  { x1: 0, z1: 3.5, x2: 14.0, z2: 3.5, width: 2.6 },
-  { x1: 14.0, z1: 3.5, x2: 24.0, z2: 3.5, width: 2.6 },
-  { x1: 24.0, z1: 3.5, x2: 36.0, z2: 3.0, width: 2.5 },
-  { x1: 36.0, z1: 3.0, x2: 44.0, z2: 5.0, width: 2.5 },
-  { x1: 44.0, z1: 5.0, x2: 52.0, z2: 4.0, width: 2.5 },
-  { x1: 14.0, z1: 3.5, x2: 12.0, z2: 20.0, width: 2.5 },
-  { x1: 18.0, z1: 3.5, x2: 18.0, z2: 8.0, width: 2.4 }, // Sétány a Kocsma bejáratához
-
-  // 7. Északi Főutca (x=0)
-  { x1: 0, z1: -19.5, x2: 0, z2: -36.0, width: 3.0 },
-  { x1: 0, z1: -36.0, x2: 0, z2: -50.0, width: 2.8 },
-
-  // 8. Észak-Nyugati Vadász és Solymász út (Közvetlenül a Vadászházhoz (-36, -34) és Solymászhoz (-38, -46) vezet, TÁVOL a folyótól!)
-  { x1: 0, z1: -28.0, x2: -14.0, z2: -28.0, width: 2.5 },
-  { x1: -14.0, z1: -28.0, x2: -14.0, z2: -48.0, width: 2.5 },
-  { x1: -14.0, z1: -48.0, x2: 0, z2: -48.0, width: 2.5 },
-  { x1: -14.0, z1: -48.0, x2: -24.0, z2: -48.0, width: 2.5 },
-  { x1: -24.0, z1: -48.0, x2: -34.0, z2: -42.0, width: 2.5 },
-  { x1: -34.0, z1: -42.0, x2: -36.0, z2: -34.0, width: 2.5 }, // Vadászház bejárata
-  { x1: -24.0, z1: -48.0, x2: -38.0, z2: -46.0, width: 2.4 }, // Solymász Bence bevezető útja
-
-  // 9. Észak-Keleti Gyümölcsös és Piac út (TÁVOL a folyótól)
-  { x1: 0, z1: -20.0, x2: 14.0, z2: -20.0, width: 2.5 },
-  { x1: 14.0, z1: -20.0, x2: 24.0, z2: -20.0, width: 2.5 },
-  { x1: 24.0, z1: -20.0, x2: 34.0, z2: -18.0, width: 2.5 },
-  { x1: 34.0, z1: -18.0, x2: 44.0, z2: -24.0, width: 2.5 },
-  { x1: 44.0, z1: -24.0, x2: 48.0, z2: -36.0, width: 2.5 },
-  { x1: 48.0, z1: -36.0, x2: 44.0, z2: -48.0, width: 2.5 },
-  { x1: 14.0, z1: -20.0, x2: 14.0, z2: -24.0, width: 2.5 },
-  { x1: 14.0, z1: -24.0, x2: 8.0, z2: -27.0, width: 2.5 },
-  { x1: 8.0, z1: -27.0, x2: 0, z2: -28.0, width: 2.5 },
-];
-
-function getClosestPointOnRoads(px, pz) {
-  let closestX = 0, closestZ = 0, minDistSq = Infinity;
-  for (const r of VILLAGE_ROADS) {
-    const dx = r.x2 - r.x1;
-    const dz = r.z2 - r.z1;
-    const lenSq = dx * dx + dz * dz;
-    if (lenSq === 0) continue;
-    const u = Math.max(0, Math.min(1, ((px - r.x1) * dx + (pz - r.z1) * dz) / lenSq));
-    const nx = r.x1 + u * dx;
-    const nz = r.z1 + u * dz;
-    const distSq = (px - nx) * (px - nx) + (pz - nz) * (pz - nz);
-    if (distSq < minDistSq) {
-      minDistSq = distSq;
-      closestX = nx;
-      closestZ = nz;
-    }
+const trafficSignTexCache = new Map();
+function getTrafficSignTexture(type) {
+  if (trafficSignTexCache.has(type)) return trafficSignTexCache.get(type);
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  if (type === 'speed30' || type === 'speed50') {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(64, 64, 58, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#d62828';
+    ctx.stroke();
+    ctx.fillStyle = '#1d1f23';
+    ctx.font = 'bold 54px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(type === 'speed30' ? '30' : '50', 64, 67);
   }
-  return { x: closestX, z: closestZ, dist: Math.sqrt(minDistSq) };
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  trafficSignTexCache.set(type, tex);
+  return tex;
+}
+
+function createTrafficSign(x, z, rotY, type) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = rotY;
+  // Fém oszlop
+  g.add(cyl(0.055, 0.065, 2.25, 0x7b828a, 0, 1.125, 0, 8));
+  const headY = 2.18;
+
+  if (type === 'stop') {
+    const rimGeo = cachedGeo('sign_stop_rim', () => new THREE.CylinderGeometry(0.36, 0.36, 0.04, 8));
+    const rim = new THREE.Mesh(rimGeo, mat(0xf5f5f0));
+    rim.position.set(0, headY, 0);
+    rim.rotation.set(Math.PI / 2, 0, Math.PI / 8);
+    const faceGeo = cachedGeo('sign_stop_face', () => new THREE.CylinderGeometry(0.31, 0.31, 0.052, 8));
+    const face = new THREE.Mesh(faceGeo, mat(0xd62828));
+    face.position.set(0, headY, 0);
+    face.rotation.set(Math.PI / 2, 0, Math.PI / 8);
+    const bar = box(0.42, 0.10, 0.065, 0xffffff, 0, headY, 0);
+    g.add(rim, face, bar);
+  } else if (type === 'priority') {
+    const rimGeo = cachedGeo('sign_prio_rim', () => new THREE.BoxGeometry(0.54, 0.54, 0.04));
+    const rim = new THREE.Mesh(rimGeo, mat(0xf5f5f0));
+    rim.position.set(0, headY, 0);
+    rim.rotation.z = Math.PI / 4;
+    const faceGeo = cachedGeo('sign_prio_face', () => new THREE.BoxGeometry(0.45, 0.45, 0.052));
+    const face = new THREE.Mesh(faceGeo, mat(0xffc312));
+    face.position.set(0, headY, 0);
+    face.rotation.z = Math.PI / 4;
+    g.add(rim, face);
+  } else if (type === 'crosswalk') {
+    g.add(box(0.52, 0.52, 0.045, 0x1e5fa8, 0, headY, 0));
+    const triGeo = cachedGeo('sign_cw_tri', () => new THREE.CylinderGeometry(0.22, 0.22, 0.056, 3));
+    const tri = new THREE.Mesh(triGeo, mat(0xffffff));
+    tri.position.set(0, headY - 0.02, 0);
+    tri.rotation.x = Math.PI / 2;
+    g.add(tri);
+    for (const bx of [-0.075, 0, 0.075]) {
+      g.add(box(0.036, 0.09, 0.064, 0x1e5fa8, bx, headY - 0.08, 0));
+    }
+  } else if (type === 'speed30' || type === 'speed50') {
+    const discGeo = cachedGeo('sign_speed_disc', () => new THREE.CylinderGeometry(0.32, 0.32, 0.045, 16));
+    const disc = new THREE.Mesh(discGeo, mat(0xd62828));
+    disc.position.set(0, headY, 0);
+    disc.rotation.x = Math.PI / 2;
+    const faceMat = new THREE.MeshBasicMaterial({ map: getTrafficSignTexture(type), transparent: true });
+    const faceGeo = cachedGeo('sign_speed_plane', () => new THREE.PlaneGeometry(0.56, 0.56));
+    const front = new THREE.Mesh(faceGeo, faceMat);
+    front.position.set(0, headY, 0.028);
+    const back = new THREE.Mesh(faceGeo, faceMat);
+    back.position.set(0, headY, -0.028);
+    back.rotation.y = Math.PI;
+    g.add(disc, front, back);
+  }
+
+  scene.add(g);
+  return g;
 }
 
 function buildOptimizedEnvironment() {
@@ -1025,44 +1214,151 @@ function buildOptimizedEnvironment() {
   waterInst.instanceMatrix.needsUpdate = true;
   scene.add(bankInst, waterInst);
 
-  // Falusi Úthálózat kiépítése
-  const roadMat = new THREE.MeshLambertMaterial({ color: 0xc8b082, flatShading: true });
-  envRefs.roadMat = roadMat;
-  const addRoad = (x1, z1, x2, z2, width = 2.6) => {
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    const road = new THREE.Mesh(new THREE.BoxGeometry(width, 0.06, len), roadMat);
-    road.position.set((x1 + x2) / 2, 0.03, (z1 + z2) / 2);
-    road.rotation.y = Math.atan2(x2 - x1, z2 - z1);
-    road.receiveShadow = true;
-    scene.add(road);
-  };
+  // 1. Városi 2 sávos aszfalt úthálózat kiépítése
+  const asphaltMat = new THREE.MeshLambertMaterial({ color: 0x3e4248, flatShading: true });
+  envRefs.roadMat = asphaltMat;
+  const sidewalkMat = new THREE.MeshLambertMaterial({ color: 0xd2cab8, flatShading: true });
+  envRefs.sidewalkMat = sidewalkMat;
+  const curbMat = mat(0x9e978b);
 
   for (const r of VILLAGE_ROADS) {
-    addRoad(r.x1, r.z1, r.x2, r.z2, r.width);
+    const len = Math.hypot(r.x2 - r.x1, r.z2 - r.z1);
+    const road = new THREE.Mesh(new THREE.BoxGeometry(r.width, 0.06, len), asphaltMat);
+    road.position.set((r.x1 + r.x2) / 2, 0.03, (r.z1 + r.z2) / 2);
+    road.rotation.y = Math.atan2(r.x2 - r.x1, r.z2 - r.z1);
+    road.receiveShadow = true;
+    scene.add(road);
   }
 
-  // Útjelző fatáblák a főbb csomópontokon
-  const createSignpost = (x, z, signs = []) => {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    g.add(cyl(0.08, 0.11, 2.3, 0x4a2e16, 0, 1.15, 0, 6));
-    signs.forEach((s, idx) => {
-      const y = 1.95 - idx * 0.35;
-      const plank = box(1.15, 0.22, 0.06, 0x7c4f2a, 0, y, 0);
-      plank.rotation.y = s.rot || 0;
-      const arrow = cone(0.15, 0.22, 0x7c4f2a, Math.sin(s.rot || 0) * 0.6, y, Math.cos(s.rot || 0) * 0.6, 4);
-      arrow.rotation.z = -Math.PI / 2;
-      arrow.rotation.y = s.rot || 0;
-      g.add(plank, arrow);
-    });
-    scene.add(g);
-  };
-  createSignpost(1.8, -1.0, [{ rot: -Math.PI / 2 }, { rot: Math.PI / 2 }]);
-  createSignpost(-2.4, 5.0, [{ rot: Math.PI }, { rot: 2.4 }]);
-  createSignpost(2.4, 5.0, [{ rot: 0 }, { rot: -1.2 }]);
-  createSignpost(1.8, -20.5, [{ rot: 2.5 }, { rot: -0.8 }]);
+  // 2. Emelt járdák szegélykővel (kereszteződésekben tisztán megszakítva!)
+  for (const seg of SIDEWALK_SEGMENTS) {
+    const yaw = Math.atan2(seg.x2 - seg.x1, seg.z2 - seg.z1);
+    const mx = (seg.x1 + seg.x2) / 2;
+    const mz = (seg.z1 + seg.z2) / 2;
 
-  // Díszítőelemek a falu utcáin: fahordók és ládák
+    const swMesh = new THREE.Mesh(new THREE.BoxGeometry(SIDEWALK_WIDTH, 0.09, seg.len), sidewalkMat);
+    swMesh.position.set(mx, 0.045, mz);
+    swMesh.rotation.y = yaw;
+    swMesh.receiveShadow = true;
+    scene.add(swMesh);
+
+    const curbShift = -seg.side * (SIDEWALK_WIDTH / 2 - 0.04);
+    const curbMesh = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, seg.len), curbMat);
+    curbMesh.position.set(mx + seg.nx * curbShift, 0.05, mz + seg.nz * curbShift);
+    curbMesh.rotation.y = yaw;
+    curbMesh.receiveShadow = true;
+    scene.add(curbMesh);
+  }
+
+  // 3. Fehér szaggatott felezőcsíkok az úttengelyen (kereszteződések & zebrák kikerülésével)
+  const dashPlacements = [];
+  for (const r of VILLAGE_ROADS) {
+    const dx = r.x2 - r.x1;
+    const dz = r.z2 - r.z1;
+    const len = Math.hypot(dx, dz);
+    const ux = dx / len;
+    const uz = dz / len;
+    const yaw = Math.atan2(dx, dz);
+    const isVertMain = Math.abs(r.x1) < 0.1 && Math.abs(r.x2) < 0.1;
+    const isHoriz = Math.abs(dz) < 0.1;
+
+    for (let t = 1.25; t <= len - 1.1; t += 2.2) {
+      const wx = r.x1 + ux * t;
+      const wz = r.z1 + uz * t;
+      if (isVertMain) {
+        if ((wz >= -9.0 && wz <= -6.7) || (wz >= -2.5 && wz <= 9.8)) continue;
+        if (wz >= 16.0 && wz <= 24.0) continue;
+        if (wz >= 38.0 && wz <= 46.0) continue;
+        if (wz >= -21.2 && wz <= -19.0) continue;
+        if (wz >= -38.8 && wz <= -32.2) continue;
+        if (wz >= -46.8 && wz <= -40.2) continue;
+      } else if (isHoriz) {
+        const limitX = Math.abs(r.z1 - 3.5) < 0.5 ? 5.9 : 4.1;
+        if (Math.abs(wx) <= limitX) continue;
+      }
+      dashPlacements.push({ x: wx, z: wz, rot: yaw });
+    }
+  }
+  if (dashPlacements.length) {
+    const dashInst = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.14, 0.014, 1.1),
+      mat(0xf2f2ec),
+      dashPlacements.length
+    );
+    dashInst.receiveShadow = true;
+    dashPlacements.forEach((d, idx) => {
+      dummy.scale.set(1, 1, 1);
+      dummy.position.set(d.x, 0.064, d.z);
+      dummy.rotation.set(0, d.rot, 0);
+      dummy.updateMatrix();
+      dashInst.setMatrixAt(idx, dummy.matrix);
+    });
+    dashInst.instanceMatrix.needsUpdate = true;
+    scene.add(dashInst);
+  }
+
+  // 4. Gyalogos átkelőhelyek (Zebrák)
+  const CROSSWALKS = [
+    { x: 0, z: -7.9, rot: 0 },
+    { x: 0, z: -20.1, rot: 0 },
+    { x: 0, z: -1.4, rot: 0 },
+    { x: 0, z: 8.6, rot: 0 },
+    { x: -4.8, z: 3.5, rot: Math.PI / 2 },
+    { x: 4.8, z: 3.5, rot: Math.PI / 2 },
+    { x: 0, z: 17.2, rot: 0 },
+    { x: 0, z: 22.8, rot: 0 },
+    { x: -2.9, z: 20.0, rot: Math.PI / 2 },
+    { x: 0, z: 39.2, rot: 0 },
+    { x: 0, z: 44.8, rot: 0 },
+    { x: -2.9, z: 42.0, rot: Math.PI / 2 },
+    { x: 2.9, z: 42.0, rot: Math.PI / 2 },
+    { x: 0, z: -33.2, rot: 0 },
+    { x: 2.9, z: -36.0, rot: Math.PI / 2 },
+    { x: 0, z: -41.2, rot: 0 },
+    { x: -2.9, z: -44.0, rot: Math.PI / 2 },
+  ];
+  const zebraOffsets = [-1.75, -1.05, -0.35, 0.35, 1.05, 1.75];
+  const zebraInst = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.32, 0.02, 1.4),
+    mat(0xf5f5f0),
+    CROSSWALKS.length * zebraOffsets.length
+  );
+  zebraInst.receiveShadow = true;
+  let zIdx = 0;
+  for (const cw of CROSSWALKS) {
+    const cosR = Math.cos(cw.rot);
+    const sinR = Math.sin(cw.rot);
+    for (const lx of zebraOffsets) {
+      dummy.scale.set(1, 1, 1);
+      dummy.position.set(cw.x + cosR * lx, 0.068, cw.z - sinR * lx);
+      dummy.rotation.set(0, cw.rot, 0);
+      dummy.updateMatrix();
+      zebraInst.setMatrixAt(zIdx++, dummy.matrix);
+    }
+  }
+  zebraInst.instanceMatrix.needsUpdate = true;
+  scene.add(zebraInst);
+
+  // 5. 3D Közlekedési táblák (STOP, Főútvonal, Zebra, Sebességkorlátozás)
+  createTrafficSign(-3.8, 22.8, -Math.PI / 2, 'stop');
+  createTrafficSign(3.8, 44.8, Math.PI / 2, 'stop');
+  createTrafficSign(-3.8, 44.8, -Math.PI / 2, 'stop');
+  createTrafficSign(3.8, -33.2, Math.PI / 2, 'stop');
+  createTrafficSign(-3.8, -41.2, -Math.PI / 2, 'stop');
+
+  createTrafficSign(3.5, 16.5, 0, 'priority');
+  createTrafficSign(-3.5, -21.5, Math.PI, 'priority');
+
+  createTrafficSign(3.4, -7.8, 0, 'crosswalk');
+  createTrafficSign(-3.4, 8.6, Math.PI, 'crosswalk');
+  createTrafficSign(-3.4, -20.1, Math.PI, 'crosswalk');
+  createTrafficSign(5.2, 6.4, Math.PI / 2, 'crosswalk');
+
+  createTrafficSign(-8.0, 6.4, Math.PI / 2, 'speed30');
+  createTrafficSign(8.0, 0.6, -Math.PI / 2, 'speed30');
+  createTrafficSign(3.5, -24.0, Math.PI, 'speed50');
+
+  // Díszítőelemek a Kocsma sörkertje mellett (utaktól biztonságos távolságban)
   const addDecorProp = (x, z, type = 'barrel') => {
     if (type === 'barrel') {
       const b = cyl(0.32, 0.38, 0.82, 0x6e472a, x, 0.41, z, 8);
@@ -1072,16 +1368,20 @@ function buildOptimizedEnvironment() {
       scene.add(c);
     }
   };
-  addDecorProp(18.2, 5.8, 'barrel');
-  addDecorProp(17.6, 5.4, 'crate');
-  addDecorProp(27.4, 5.6, 'barrel');
-  addDecorProp(26.6, 5.8, 'crate');
-  addDecorProp(-1.8, -7.2, 'barrel');
+  addDecorProp(14.5, 9.2, 'barrel');
+  addDecorProp(13.8, 9.6, 'crate');
+  addDecorProp(21.8, 9.2, 'barrel');
+  addDecorProp(22.4, 9.6, 'crate');
 
+  // Közvilágítási lámpaoszlopok szigorúan a járda külső szélén
   const lampPositions = [
-    [-2.5, -2], [2.5, -7], [-2.5, -21], [8, 6], [12, 11],
-    [-10, 11], [-22, 20], [14, -22], [-15, -25], [26, 16],
-    [-28, 7], [32, 7], [0, 24], [0, 40], [-18, 32], [20, 32]
+    [-3.55, -5.0], [3.55, -5.0], [-3.55, -22.5], [3.55, -22.5],
+    [-3.55, 12.0], [3.55, 14.0], [-3.55, 31.0], [3.55, 31.0], [-3.55, 50.0], [3.55, 50.0],
+    [-16.0, 7.05], [-38.0, -0.05], [-52.0, 7.05],
+    [14.0, -0.05], [24.0, 7.05], [47.0, -0.05],
+    [-15.0, 16.45], [-38.0, 23.55],
+    [-26.0, 38.45], [26.0, 45.55],
+    [-28.0, -40.45], [26.0, -32.45],
   ];
   const bulbMat = new THREE.MeshBasicMaterial({ color: 0x555045 });
   streetLampBulbs.push(bulbMat);
@@ -1098,11 +1398,16 @@ function buildOptimizedEnvironment() {
   }
 
   const colorHelper = new THREE.Color();
+  const existingHouses = villageData?.residents || [];
 
   const isSpotFree = (x, z) => {
     if (Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH + 2.5) return false;
+    if (getClosestPointOnRoads(x, z).dist < 4.8) return false;
     for (const p of Object.values(PLACES)) {
       if (Math.hypot(x - p.x, z - p.z) < p.r + 5.5) return false;
+    }
+    for (const h of existingHouses) {
+      if (Math.hypot(x - h.x, z - h.z) < 6.0) return false;
     }
     return true;
   };
@@ -1191,7 +1496,23 @@ function buildOptimizedEnvironment() {
   }
   scene.add(rockInst);
 
-  // Utcai és kerti bokrok (Bushes)
+  // Utcai és zöldsávos bokrok (Bushes) — szigorúan távol az aszfalttól, járdáktól és udvaroktól
+  const isBushSpotOk = (bx, bz) => {
+    if (Math.abs(bz - riverZ(bx)) <= RIVER_HALF_WIDTH + 1.6) return false;
+    if (getClosestPointOnRoads(bx, bz).dist < 4.2) return false;
+    for (const p of Object.values(PLACES)) {
+      if (Math.hypot(bx - p.x, bz - p.z) < p.r + 1.1) return false;
+    }
+    for (const h of existingHouses) {
+      if (Math.hypot(bx - h.x, bz - h.z) < 4.8) return false;
+      const rot = h.rot || 0;
+      const frontX = h.x + Math.sin(rot) * 4.5;
+      const frontZ = h.z + Math.cos(rot) * 4.5;
+      if (Math.hypot(bx - frontX, bz - frontZ) < 3.0) return false;
+    }
+    return true;
+  };
+
   const bushCoords = [];
   for (let i = 0; i < VILLAGE_ROADS.length; i++) {
     const r = VILLAGE_ROADS[i];
@@ -1206,9 +1527,10 @@ function buildOptimizedEnvironment() {
       const mx = r.x1 + dx * u;
       const mz = r.z1 + dz * u;
       const side = (s % 2 === 0 ? 1 : -1);
-      const bx = mx + nx * side * (r.width / 2 + 1.2 + hash(`bs_${i}_${s}`, 1) * 0.7);
-      const bz = mz + nz * side * (r.width / 2 + 1.2 + hash(`bs_${i}_${s}`, 2) * 0.7);
-      if (Math.abs(bz - riverZ(bx)) > RIVER_HALF_WIDTH + 1.6) {
+      const offset = r.width / 2 + 2.0 + hash(`bs_${i}_${s}`, 1) * 0.6;
+      const bx = mx + nx * side * offset;
+      const bz = mz + nz * side * offset;
+      if (isBushSpotOk(bx, bz)) {
         bushCoords.push({
           x: bx,
           z: bz,
@@ -1218,16 +1540,18 @@ function buildOptimizedEnvironment() {
       }
     }
   }
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + 0.12;
-    const bx = PLACES.tuz.x + Math.cos(a) * 5.6;
-    const bz = PLACES.tuz.z + Math.sin(a) * 5.6;
-    bushCoords.push({
-      x: bx,
-      z: bz,
-      scale: 0.6 + hash(`fbs_${i}`, 1) * 0.4,
-      shade: hash(`fbs_${i}`, 2),
-    });
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2 + 0.2;
+    const bx = PLACES.tuz.x + Math.cos(a) * 5.8;
+    const bz = PLACES.tuz.z + Math.sin(a) * 5.8;
+    if (getClosestPointOnRoads(bx, bz).dist >= 4.2) {
+      bushCoords.push({
+        x: bx,
+        z: bz,
+        scale: 0.6 + hash(`fbs_${i}`, 1) * 0.4,
+        shade: hash(`fbs_${i}`, 2),
+      });
+    }
   }
 
   const bushInst = new THREE.InstancedMesh(
@@ -1248,7 +1572,7 @@ function buildOptimizedEnvironment() {
   });
   scene.add(bushInst);
 
-  // Gazdag virágmezők és udvari virágok (Flowers)
+  // Gazdag virágmezők (utak, járdák, házak és nevezetes épületek kikerülésével)
   const FLOWER_COUNT = 450;
   const flowerInst = new THREE.InstancedMesh(
     new THREE.ConeGeometry(0.24, 0.45, 5),
@@ -1260,7 +1584,11 @@ function buildOptimizedEnvironment() {
   for (let i = 0; i < FLOWER_COUNT; i++) {
     const fx = (hash(`fl_${i}`, 1) - 0.5) * 190;
     const fz = (hash(`fl_${i}`, 2) - 0.5) * 190;
-    const valid = Math.abs(fz - riverZ(fx)) >= RIVER_HALF_WIDTH + 1.5 && Math.hypot(fx - PLACES.tuz.x, fz - PLACES.tuz.z) > 5.5;
+    const valid =
+      Math.abs(fz - riverZ(fx)) >= RIVER_HALF_WIDTH + 1.5 &&
+      getClosestPointOnRoads(fx, fz).dist >= 4.8 &&
+      Object.values(PLACES).every((p) => Math.hypot(fx - p.x, fz - p.z) > p.r + 1.5) &&
+      existingHouses.every((h) => Math.hypot(fx - h.x, fz - h.z) >= 4.8);
     envRefs.flowerValid.push(valid);
     if (!valid) {
       dummy.scale.setScalar(0);
@@ -1309,10 +1637,10 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   const plazaInner = cyl(3.7, 3.7, 0.12, 0xb5aba0, 0, 0.06, 0, 20);
   g.add(plazaOuter, plazaInner);
 
-  // Padok a Főtér szélén
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const bench = box(1.65, 0.38, 0.48, 0x74482a, Math.cos(a) * 3.95, 0.22, Math.sin(a) * 3.95);
+  // Padok a Főtér átlós sarkaiban (szabadon hagyva a 4 befutó útvonalat és a peremjárdát)
+  const FOTER_BENCH_ANGLES = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+  for (const a of FOTER_BENCH_ANGLES) {
+    const bench = box(1.65, 0.38, 0.48, 0x74482a, Math.cos(a) * 3.25, 0.22, Math.sin(a) * 3.25);
     bench.rotation.y = -a + Math.PI / 2;
     g.add(bench);
   }
@@ -1410,19 +1738,75 @@ function registerLandmark(key, group, radius = 4.5, height = 5) {
   registerLandmark('tuz', g, 4.5, 5.2);
 }
 
-// 4.2 Fahíd
+// 4.2 2 Sávos Közúti + Gyalogos Híd
 {
   const g = new THREE.Group();
   const len = BRIDGE.southZ - BRIDGE.northZ;
   g.position.set(BRIDGE.x, 0, (BRIDGE.southZ + BRIDGE.northZ) / 2);
-  g.add(box(3.4, 0.25, len, 0x8a5a33, 0, 0.45, 0, true));
-  for (const side of [-1.55, 1.55]) {
-    g.add(box(0.14, 0.12, len, 0x5a3a22, side, 1.15, 0));
-    for (let z = -len / 2 + 0.5; z <= len / 2 - 0.5; z += 2.5) {
-      g.add(box(0.16, 1.2, 0.16, 0x5a3a22, side, 0.6, z));
+
+  // Tartószerkezet és hídfők
+  g.add(box(6.8, 0.34, len, 0x7c5130, 0, 0.36, 0, true));
+  for (const px of [-2.9, 2.9]) {
+    for (const pz of [-3.6, 3.6]) {
+      g.add(cyl(0.24, 0.28, 0.9, 0x5a3a22, px, 0.1, pz, 8));
     }
   }
-  registerLandmark('hid', g, 2.5, 2.5);
+
+  // Középső 4.6m-es 2 sávos sötét aszfalt úttest (top y = 0.56)
+  const bridgeRoad = new THREE.Mesh(
+    new THREE.BoxGeometry(CAR_ROAD_WIDTH, 0.06, len),
+    envRefs.roadMat || mat(0x3e4248)
+  );
+  bridgeRoad.position.set(0, 0.53, 0);
+  bridgeRoad.receiveShadow = true;
+  g.add(bridgeRoad);
+
+  // Szaggatott fehér felezővonal a hídon
+  for (let bz = -len / 2 + 1.25; bz <= len / 2 - 1.1; bz += 2.2) {
+    g.add(box(0.14, 0.014, 1.1, 0xf2f2ec, 0, 0.566, bz));
+  }
+
+  // Kétoldali 1.1m széles emelt gyalogos járdák (x = ±2.85, top y = 0.62) és korlát (x = ±3.38)
+  for (const side of [-1, 1]) {
+    const sw = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.12, len),
+      envRefs.sidewalkMat || mat(0xd2cab8)
+    );
+    sw.position.set(side * SIDEWALK_OFFSET, 0.56, 0);
+    sw.receiveShadow = true;
+    g.add(sw);
+
+    const railX = side * 3.38;
+    g.add(box(0.12, 0.10, len, 0x5a3a22, railX, 1.28, 0));
+    g.add(box(0.08, 0.08, len, 0x6e472a, railX, 0.95, 0));
+    for (let z = -len / 2 + 0.4; z <= len / 2 - 0.3; z += 2.04) {
+      g.add(box(0.14, 0.78, 0.14, 0x5a3a22, railX, 0.92, z));
+    }
+  }
+
+  // Finom feljáró rámpák a híd két végén (y: 0.08 -> 0.56/0.62)
+  for (const endSign of [-1, 1]) {
+    const rampRoad = new THREE.Mesh(
+      new THREE.BoxGeometry(CAR_ROAD_WIDTH, 0.08, 0.62),
+      envRefs.roadMat || mat(0x3e4248)
+    );
+    rampRoad.position.set(0, 0.30, endSign * (len / 2 + 0.22));
+    rampRoad.rotation.x = endSign * 0.72;
+    rampRoad.receiveShadow = true;
+    g.add(rampRoad);
+    for (const side of [-1, 1]) {
+      const rampSw = new THREE.Mesh(
+        new THREE.BoxGeometry(1.1, 0.08, 0.62),
+        envRefs.sidewalkMat || mat(0xd2cab8)
+      );
+      rampSw.position.set(side * SIDEWALK_OFFSET, 0.34, endSign * (len / 2 + 0.22));
+      rampSw.rotation.x = endSign * 0.76;
+      rampSw.receiveShadow = true;
+      g.add(rampSw);
+    }
+  }
+
+  registerLandmark('hid', g, 3.4, 2.5);
 }
 
 // 4.3 Kocsma (A Falusi Kocsma tágas sörkerttel és sétánnyal a falu utcája mellett)
@@ -1620,7 +2004,8 @@ const SEASON_PALETTES = {
     ground: 0x88c452,
     bank: 0xd6c79c,
     water: 0x4ea5d9,
-    road: 0xc8b288,
+    road: 0x3e4248,
+    sidewalk: 0xd2cab8,
     daySkyBg: 0x88c452,
     dayGroundLight: 0x9ec864,
     leaves: [0xf7a8b8, 0xffd1dc, 0x7ed957, 0x95e06c, 0x6ec24a],
@@ -1633,7 +2018,8 @@ const SEASON_PALETTES = {
     ground: 0x8fb24a,
     bank: 0xd5c295,
     water: 0x4ea5d9,
-    road: 0xc8b082,
+    road: 0x3e4248,
+    sidewalk: 0xd2cab8,
     daySkyBg: 0x8fb24a,
     dayGroundLight: 0x9ab05a,
     leaves: [0x5c8c38, 0x6e9e42, 0x4f7d2f, 0x65963e],
@@ -1646,7 +2032,8 @@ const SEASON_PALETTES = {
     ground: 0xb59449,
     bank: 0xc4ae82,
     water: 0x3d8ab8,
-    road: 0xb89f72,
+    road: 0x46484b,
+    sidewalk: 0xc8bea8,
     daySkyBg: 0xb59449,
     dayGroundLight: 0xa88944,
     leaves: [0xc83e2b, 0xe07a2e, 0xe8b838, 0xa85528, 0xd95d39],
@@ -1659,7 +2046,8 @@ const SEASON_PALETTES = {
     ground: 0xeaf1f7,
     bank: 0xdce6ef,
     water: 0x7ab8de,
-    road: 0xcfd8df,
+    road: 0x737d8a,
+    sidewalk: 0xdce5ed,
     daySkyBg: 0xdce8f2,
     dayGroundLight: 0xd0dde8,
     leaves: [0xe8f1f7, 0xd2e2ec, 0xf4f9fc, 0xc5d8e6],
@@ -1680,11 +2068,12 @@ function applySeason(season) {
     b.classList.toggle('active', b.dataset.s === season);
   });
 
-  // 1. Talaj, folyópart, víz és utak színezése
+  // 1. Talaj, folyópart, víz, utak és járdák színezése
   if (envRefs.groundMat) envRefs.groundMat.color.setHex(pal.ground);
   if (envRefs.bankMat) envRefs.bankMat.color.setHex(pal.bank);
   if (envRefs.waterMat) envRefs.waterMat.color.setHex(pal.water);
   if (envRefs.roadMat) envRefs.roadMat.color.setHex(pal.road);
+  if (envRefs.sidewalkMat) envRefs.sidewalkMat.color.setHex(pal.sidewalk);
 
   // 2. Falevelek (Lombhullató fák + Fenyők) átszínezése az évszaknak megfelelően!
   const cHelper = new THREE.Color();
@@ -1855,101 +2244,332 @@ function updateMyHomeBeaconPosition() {
   myHomeBeacon.position.set(myRes.x, 0, myRes.z);
 }
 
+function getHouseStyleIndex(res) {
+  if (res && res.houseStyle !== undefined && res.houseStyle !== null && Number.isFinite(Number(res.houseStyle))) {
+    return ((Math.trunc(Number(res.houseStyle)) % 5) + 5) % 5;
+  }
+  return Math.floor(hash((res && res.name) || 'lakos', 7) * 5) % 5;
+}
+
+function getHouseDoorLocalPos(styleIdx) {
+  switch (styleIdx) {
+    case 1: return { x: -0.9, z: 2.75 };
+    case 2: return { x: 0, z: 2.85 };
+    case 3: return { x: -1.2, z: 2.75 };
+    case 4: return { x: 0, z: 2.85 };
+    case 0:
+    default: return { x: 0, z: 2.95 };
+  }
+}
+
+function getDoorWorldPos(raw, styleIdx = getHouseStyleIndex(raw)) {
+  const local = getHouseDoorLocalPos(styleIdx);
+  const rot = raw.rot || 0;
+  const sin = Math.sin(rot);
+  const cos = Math.cos(rot);
+  return [
+    raw.x + local.x * cos + local.z * sin,
+    raw.z - local.x * sin + local.z * cos,
+  ];
+}
+
+function addGableRoof(g, { x = 0, y = 0, z = 0, w, h, d, ridgeAlong = 'x', roofMat, res, includeSnow = true }) {
+  const span = ridgeAlong === 'x' ? d : w;
+  const len = ridgeAlong === 'x' ? w : d;
+  const geoKey = `gable:${span}:${h}:${len}:${ridgeAlong}`;
+  const geo = cachedGeo(geoKey, () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-span / 2, 0);
+    shape.lineTo(span / 2, 0);
+    shape.lineTo(0, h);
+    shape.closePath();
+    const extrude = new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false });
+    extrude.translate(0, 0, -len / 2);
+    if (ridgeAlong === 'x') {
+      extrude.rotateY(Math.PI / 2);
+    }
+    return extrude;
+  });
+  const roofMesh = new THREE.Mesh(geo, roofMat);
+  roofMesh.position.set(x, y, z);
+  roofMesh.castShadow = true;
+  roofMesh.receiveShadow = true;
+  if (res) roofMesh.userData.resident = res;
+  g.add(roofMesh);
+  housePickers.push(roofMesh);
+
+  if (includeSnow) {
+    const snowGroup = new THREE.Group();
+    snowGroup.position.set(x, y, z);
+    if (ridgeAlong === 'z') snowGroup.rotation.y = Math.PI / 2;
+    const theta = Math.atan2(h, span / 2);
+    const slopeLen = Math.hypot(span / 2, h) + 0.08;
+    const snowGeo = cachedGeo(`gablesnow:${len}:${slopeLen}`, () => new THREE.BoxGeometry(len + 0.05, 0.09, slopeLen));
+    const snowM = mat(0xf2f7fb);
+    const offN = 0.038;
+    for (const sign of [1, -1]) {
+      const slab = new THREE.Mesh(snowGeo, snowM);
+      slab.position.set(0, h / 2 + Math.cos(theta) * offN, sign * (span / 4 + Math.sin(theta) * offN));
+      slab.rotation.x = sign * theta;
+      slab.receiveShadow = true;
+      snowGroup.add(slab);
+    }
+    snowGroup.visible = currentSeason === 'tel';
+    g.add(snowGroup);
+    envRefs.snowRoofs.push(snowGroup);
+  }
+  return roofMesh;
+}
+
+function addHouseWindow(g, x, y, z, w, h, winMat, rotY = 0, withPlanter = false, blossomColor = 0xe63946) {
+  const geo = cachedGeo(`win:${w}:${h}:0.12`, () => new THREE.BoxGeometry(w, h, 0.12));
+  const win = new THREE.Mesh(geo, winMat);
+  win.position.set(x, y, z);
+  win.rotation.y = rotY;
+  g.add(win);
+  if (withPlanter) {
+    const pGroup = new THREE.Group();
+    pGroup.position.set(x, y, z);
+    pGroup.rotation.y = rotY;
+    pGroup.add(box(w + 0.06, 0.20, 0.24, 0x5a3a22, 0, -h / 2 - 0.08, 0.08));
+    pGroup.add(box(w - 0.02, 0.15, 0.18, blossomColor, 0, -h / 2 + 0.05, 0.08));
+    g.add(pGroup);
+  }
+  return win;
+}
+
+function addHouseWall(g, w, h, d, wallMat, x, y, z, res) {
+  const geo = cachedGeo(`box:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d));
+  const mesh = new THREE.Mesh(geo, wallMat);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.resident = res;
+  g.add(mesh);
+  housePickers.push(mesh);
+  return mesh;
+}
+
+function addGardenWalkway(startX, startZ, endX, endZ, width, height, centerY, surfaceMat, curbColor = 0x8f8474) {
+  const dist = Math.hypot(endX - startX, endZ - startZ);
+  if (dist <= 0.25) return;
+  const grp = new THREE.Group();
+  const walkMesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, dist), surfaceMat);
+  walkMesh.receiveShadow = true;
+  grp.add(walkMesh);
+  if (curbColor !== null) {
+    const curbMat = mat(curbColor);
+    const curbOff = width / 2 + 0.06;
+    const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.11, height + 0.02, dist), curbMat);
+    curbLeft.position.x = -curbOff;
+    const curbRight = new THREE.Mesh(new THREE.BoxGeometry(0.11, height + 0.02, dist), curbMat);
+    curbRight.position.x = curbOff;
+    curbLeft.receiveShadow = true;
+    curbRight.receiveShadow = true;
+    grp.add(curbLeft, curbRight);
+  }
+  grp.position.set((startX + endX) / 2, centerY, (startZ + endZ) / 2);
+  grp.rotation.y = Math.atan2(endX - startX, endZ - startZ);
+  scene.add(grp);
+}
+
 function createHouseGroup(res) {
+  const styleIdx = getHouseStyleIndex(res);
+  const hasDriveway = styleIdx === 1 || styleIdx === 3;
   const g = new THREE.Group();
   const wallMat = new THREE.MeshLambertMaterial({ color: res.wall || '#f5eedc', flatShading: true });
   const roofMat = new THREE.MeshLambertMaterial({ color: res.roof || '#c8523b', flatShading: true });
   const winMat = new THREE.MeshBasicMaterial({ color: 0x3a2e24 });
 
-  const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.2, 3.8), wallMat);
-  wallMesh.position.y = 1.1;
-  wallMesh.castShadow = true;
-  wallMesh.receiveShadow = true;
-  g.add(wallMesh);
-
-  const roofMesh = new THREE.Mesh(new THREE.ConeGeometry(3.6, 2.0, 4), roofMat);
-  roofMesh.position.y = 3.1;
-  roofMesh.rotation.y = Math.PI / 4;
-  roofMesh.castShadow = true;
-  g.add(roofMesh);
-
-  // Téli hóréteg a háztetőn (csak téli/havas tájon látszik)
-  const snowRoof = new THREE.Mesh(
-    new THREE.ConeGeometry(3.52, 1.55, 4),
-    mat(0xf2f7fb)
-  );
-  snowRoof.position.y = 3.38;
-  snowRoof.rotation.y = Math.PI / 4;
-  snowRoof.visible = currentSeason === 'tel';
-  g.add(snowRoof);
-  envRefs.snowRoofs.push(snowRoof);
-
-  // Kémény és Ajtó
-  g.add(box(0.55, 1.2, 0.55, 0x7a6f64, 1.1, 3.3, -0.6));
-  g.add(box(0.85, 1.55, 0.12, 0x5a3a22, 0, 0.78, 1.92));
-
-  // Bejárati kőlépcső / küszöb
-  const doorstep = box(1.3, 0.14, 0.65, 0x857a6e, 0, 0.07, 2.15);
-  g.add(doorstep);
-
-  // Ablakok és virágládák virágokkal az ablakok alatt
-  for (const wx of [-1.25, 1.25]) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.62, 0.12), winMat);
-    win.position.set(wx, 1.25, 1.92);
-    const planter = box(0.72, 0.22, 0.26, 0x5a3a22, wx, 0.88, 2.0);
-    const blossomColor = (wx < 0) ? 0xe63946 : 0xffb703;
-    const blossoms = box(0.66, 0.16, 0.20, blossomColor, wx, 1.02, 2.0);
-    g.add(win, planter, blossoms);
+  if (styleIdx === 0) {
+    // Stílus 0: Tornácos parasztház (country_porch)
+    addHouseWall(g, 4.6, 2.2, 3.6, wallMat, 0, 1.1, -0.1, res);
+    addGableRoof(g, { x: 0, y: 2.2, z: -0.1, w: 5.05, h: 1.55, d: 4.1, ridgeAlong: 'x', roofMat, res });
+    g.add(box(0.52, 1.15, 0.52, 0x7a6f64, 1.35, 3.05, -0.7));
+    // Tornác alapzat, tető és oszlopok
+    g.add(box(3.8, 0.16, 1.2, 0xa89b89, 0, 0.08, 2.28));
+    const porchRoof = new THREE.Mesh(
+      cachedGeo('box:4.0:0.12:1.35', () => new THREE.BoxGeometry(4.0, 0.12, 1.35)),
+      roofMat
+    );
+    porchRoof.position.set(0, 2.02, 2.28);
+    porchRoof.rotation.x = 0.20;
+    porchRoof.castShadow = true;
+    porchRoof.userData.resident = res;
+    g.add(porchRoof);
+    housePickers.push(porchRoof);
+    const porchSnow = box(3.96, 0.07, 1.30, 0xf2f7fb, 0, 2.11, 2.28);
+    porchSnow.rotation.x = 0.20;
+    porchSnow.visible = currentSeason === 'tel';
+    g.add(porchSnow);
+    envRefs.snowRoofs.push(porchSnow);
+    for (const px of [-1.72, 1.72]) {
+      g.add(box(0.16, 1.85, 0.16, 0x5a3a22, px, 1.04, 2.74, true));
+    }
+    for (const rx of [-1.15, 1.15]) {
+      g.add(box(1.15, 0.08, 0.08, 0x6e472a, rx, 0.72, 2.74));
+    }
+    g.add(box(0.86, 1.56, 0.12, 0x5a3a22, 0, 0.88, 1.72));
+    addHouseWindow(g, -1.35, 1.25, 1.72, 0.70, 0.62, winMat, 0, true, 0xe63946);
+    addHouseWindow(g, 1.35, 1.25, 1.72, 0.70, 0.62, winMat, 0, true, 0xffb703);
+    addHouseWindow(g, -2.32, 1.25, -0.1, 0.65, 0.60, winMat, Math.PI / 2);
+    addHouseWindow(g, 2.32, 1.25, -0.1, 0.65, 0.60, winMat, Math.PI / 2);
+    for (const side of [-2.65, 2.65]) {
+      g.add(box(0.12, 0.75, 0.12, 0x5a3a22, side, 0.375, 1.8));
+      g.add(box(0.12, 0.75, 0.12, 0x5a3a22, side, 0.375, -0.6));
+      g.add(box(0.08, 0.09, 2.4, 0x6e472a, side, 0.52, 0.6));
+      g.add(box(0.08, 0.09, 2.4, 0x6e472a, side, 0.25, 0.6));
+    }
+    g.add(cyl(0.22, 0.16, 0.3, 0xa65228, 1.05, 0.28, 2.45));
+    g.add(cone(0.30, 0.50, 0x8338ec, 1.05, 0.62, 2.45));
+  } else if (styleIdx === 1) {
+    // Stílus 1: L-alakú ház garázzsal és KOCSIFELJÁRÓVAL (l_shape_garage)
+    addHouseWall(g, 3.4, 2.3, 3.8, wallMat, -0.9, 1.15, -0.1, res);
+    addGableRoof(g, { x: -0.9, y: 2.3, z: -0.1, w: 3.85, h: 1.45, d: 4.25, ridgeAlong: 'z', roofMat, res });
+    addHouseWall(g, 2.5, 2.0, 4.4, wallMat, 2.05, 1.0, 0.2, res);
+    addGableRoof(g, { x: 2.05, y: 2.0, z: 0.2, w: 2.85, h: 1.05, d: 4.75, ridgeAlong: 'z', roofMat, res });
+    g.add(box(0.48, 1.1, 0.48, 0x7a6f64, -1.7, 3.15, -0.9));
+    // Fehér szekcionált garázskapu
+    g.add(box(2.08, 1.70, 0.10, 0xe8edf2, 2.05, 0.85, 2.41));
+    for (const gy of [0.45, 0.85, 1.25]) {
+      g.add(box(1.98, 0.04, 0.12, 0xb8c2cc, 2.05, gy, 2.41));
+    }
+    // Lakrész bejárat + ablakok
+    g.add(box(0.82, 1.54, 0.12, 0x5a3a22, -0.9, 0.78, 1.82));
+    g.add(box(1.25, 0.14, 0.62, 0x857a6e, -0.9, 0.07, 2.06));
+    addHouseWindow(g, -1.85, 1.28, 1.82, 0.68, 0.62, winMat, 0, true, 0xe63946);
+    addHouseWindow(g, 0.05, 1.28, 1.82, 0.62, 0.62, winMat, 0, true, 0xffb703);
+    addHouseWindow(g, -2.62, 1.28, -0.1, 0.72, 0.62, winMat, Math.PI / 2);
+  } else if (styleIdx === 2) {
+    // Stílus 2: Kétszintes polgári villa (two_story_villa)
+    addHouseWall(g, 4.2, 2.1, 3.6, wallMat, 0, 1.05, -0.1, res);
+    g.add(box(4.36, 0.14, 3.76, 0xdfd6c7, 0, 2.08, -0.1));
+    addHouseWall(g, 3.8, 1.8, 3.2, wallMat, 0, 2.95, -0.15, res);
+    const villaRoof = new THREE.Mesh(cachedGeo('cone:3.18:1.65:4', () => new THREE.ConeGeometry(3.18, 1.65, 4)), roofMat);
+    villaRoof.position.set(0, 4.66, -0.15);
+    villaRoof.rotation.y = Math.PI / 4;
+    villaRoof.castShadow = true;
+    villaRoof.userData.resident = res;
+    g.add(villaRoof);
+    housePickers.push(villaRoof);
+    const snowRoof = new THREE.Mesh(cachedGeo('cone:3.08:1.35:4', () => new THREE.ConeGeometry(3.08, 1.35, 4)), mat(0xf2f7fb));
+    snowRoof.position.set(0, 4.86, -0.15);
+    snowRoof.rotation.y = Math.PI / 4;
+    snowRoof.visible = currentSeason === 'tel';
+    g.add(snowRoof);
+    envRefs.snowRoofs.push(snowRoof);
+    g.add(box(0.50, 1.1, 0.50, 0x7a6f64, 1.15, 4.92, -0.75));
+    // Emeleti erkély és korlát
+    g.add(box(1.95, 0.12, 0.72, 0x6e472a, 0, 2.15, 1.78, true));
+    g.add(box(1.95, 0.08, 0.08, 0x4a2e1b, 0, 2.66, 2.10));
+    for (const bx of [-0.90, -0.45, 0, 0.45, 0.90]) {
+      g.add(box(0.06, 0.48, 0.06, 0x4a2e1b, bx, 2.42, 2.10));
+    }
+    g.add(box(0.76, 1.40, 0.10, 0x4e6475, 0, 2.90, 1.47));
+    addHouseWindow(g, -1.22, 2.98, 1.47, 0.62, 0.62, winMat, 0);
+    addHouseWindow(g, 1.22, 2.98, 1.47, 0.62, 0.62, winMat, 0);
+    // Földszinti ajtó, lépcső, ablakok
+    g.add(box(0.86, 1.56, 0.12, 0x5a3a22, 0, 0.78, 1.72));
+    g.add(box(1.32, 0.14, 0.66, 0x857a6e, 0, 0.07, 1.98));
+    addHouseWindow(g, -1.35, 1.15, 1.72, 0.68, 0.62, winMat, 0, true, 0xe63946);
+    addHouseWindow(g, 1.35, 1.15, 1.72, 0.68, 0.62, winMat, 0, true, 0xffb703);
+  } else if (styleIdx === 3) {
+    // Stílus 3: Modern ház pergola kocsibeállóval és KOCSIFELJÁRÓVAL (modern_carport)
+    addHouseWall(g, 3.8, 2.4, 3.6, wallMat, -0.7, 1.2, -0.1, res);
+    const modRoof = new THREE.Mesh(
+      cachedGeo('box:4.35:0.22:4.15', () => new THREE.BoxGeometry(4.35, 0.22, 4.15)),
+      roofMat
+    );
+    modRoof.position.set(-0.7, 2.52, -0.1);
+    modRoof.rotation.z = -0.14;
+    modRoof.castShadow = true;
+    modRoof.receiveShadow = true;
+    modRoof.userData.resident = res;
+    g.add(modRoof);
+    housePickers.push(modRoof);
+    const modSnow = box(4.30, 0.09, 4.10, 0xf2f7fb, -0.68, 2.67, -0.1);
+    modSnow.rotation.z = -0.14;
+    modSnow.visible = currentSeason === 'tel';
+    g.add(modSnow);
+    envRefs.snowRoofs.push(modSnow);
+    // Nyitott fa-fém pergola kocsibeálló (x = +2.25)
+    for (const [px, pz] of [[1.35, -1.55], [3.15, -1.55], [1.35, 1.55], [3.15, 1.55]]) {
+      g.add(box(0.13, 2.2, 0.13, 0x3a3f47, px, 1.1, pz, true));
+    }
+    g.add(box(2.2, 0.12, 0.12, 0x3a3f47, 2.25, 2.22, -1.55, true));
+    g.add(box(2.2, 0.12, 0.12, 0x3a3f47, 2.25, 2.22, 1.55, true));
+    g.add(box(0.12, 0.12, 3.4, 0x3a3f47, 1.35, 2.22, 0, true));
+    g.add(box(0.12, 0.12, 3.4, 0x3a3f47, 3.15, 2.22, 0, true));
+    for (let bz = -1.2; bz <= 1.25; bz += 0.6) {
+      g.add(box(2.15, 0.10, 0.09, 0x7a5130, 2.25, 2.28, bz));
+    }
+    // Modern bejárat + panoráma ablak + virágláda
+    g.add(box(0.84, 1.62, 0.12, 0x383e46, -1.2, 0.81, 1.72));
+    g.add(box(1.15, 0.12, 0.56, 0x9ba0a6, -1.2, 0.06, 1.98));
+    addHouseWindow(g, 0.25, 1.25, 1.72, 1.22, 0.86, winMat, 0);
+    addHouseWindow(g, -2.62, 1.32, -0.1, 0.80, 0.72, winMat, Math.PI / 2);
+    g.add(box(1.10, 0.26, 0.32, 0x5a3a22, 0.25, 0.13, 1.90));
+    g.add(box(1.02, 0.18, 0.24, 0x52b788, 0.25, 0.34, 1.90));
+  } else {
+    // Stílus 4: Meredek tetős alpesi ház tetőtéri ablakkal (steep_cottage)
+    addHouseWall(g, 4.0, 2.0, 3.8, wallMat, 0, 1.0, -0.1, res);
+    addGableRoof(g, { x: 0, y: 2.0, z: -0.1, w: 4.45, h: 2.55, d: 4.35, ridgeAlong: 'x', roofMat, res });
+    g.add(box(0.48, 1.2, 0.48, 0x7a6f64, -1.25, 3.75, -0.65));
+    // Tetőtéri ablak (dormer)
+    addHouseWall(g, 1.08, 0.86, 1.15, wallMat, 0, 2.78, 1.02, res);
+    addGableRoof(g, { x: 0, y: 3.21, z: 1.05, w: 1.28, h: 0.46, d: 1.32, ridgeAlong: 'z', roofMat, res });
+    addHouseWindow(g, 0, 2.75, 1.61, 0.62, 0.54, winMat, 0);
+    // Földszinti ajtó, lépcső, ablakok és kerítés
+    g.add(box(0.84, 1.54, 0.12, 0x5a3a22, 0, 0.77, 1.82));
+    g.add(box(1.25, 0.14, 0.62, 0x857a6e, 0, 0.07, 2.06));
+    addHouseWindow(g, -1.22, 1.12, 1.82, 0.62, 0.60, winMat, 0, true, 0xe63946);
+    addHouseWindow(g, 1.22, 1.12, 1.82, 0.62, 0.60, winMat, 0, true, 0xffb703);
+    for (const side of [-2.42, 2.42]) {
+      g.add(box(0.11, 0.75, 0.11, 0x5a3a22, side, 0.375, 1.9));
+      g.add(box(0.11, 0.75, 0.11, 0x5a3a22, side, 0.375, -0.1));
+      g.add(box(0.08, 0.09, 2.0, 0x6e472a, side, 0.52, 0.9));
+      g.add(box(0.08, 0.09, 2.0, 0x6e472a, side, 0.25, 0.9));
+    }
   }
-
-  // Udvar díszek: Fa léckerítés a telek két oldalán
-  for (const side of [-2.55, 2.55]) {
-    g.add(box(0.12, 0.75, 0.12, 0x5a3a22, side, 0.375, 2.0));
-    g.add(box(0.12, 0.75, 0.12, 0x5a3a22, side, 0.375, 0.0));
-    g.add(box(0.08, 0.09, 2.0, 0x6e472a, side, 0.52, 1.0));
-    g.add(box(0.08, 0.09, 2.0, 0x6e472a, side, 0.25, 1.0));
-  }
-
-  // Cserép virág / levendula a lépcső mellett
-  g.add(cyl(0.22, 0.16, 0.3, 0xa65228, 0.95, 0.15, 2.25));
-  g.add(cone(0.32, 0.55, 0x8338ec, 0.95, 0.52, 2.25));
 
   g.position.set(res.x, 0, res.z);
   g.rotation.y = res.rot || 0;
-  g.userData = { wallMat, roofMat, winMat, resident: res };
-  wallMesh.userData.resident = res;
-  roofMesh.userData.resident = res;
-  housePickers.push(wallMesh, roofMesh);
+  g.userData = { wallMat, roofMat, winMat, resident: res, houseStyle: styleIdx, hasDriveway };
   scene.add(g);
 
-  // KÖZVETLEN JÁRDA AZ UTCÁHOZ (Ház-utca összekötés tetszetős szegélyköves járdával)
-  const doorX = res.x + Math.sin(res.rot || 0) * 2.3;
-  const doorZ = res.z + Math.cos(res.rot || 0) * 2.3;
-  const nearestRoad = getClosestPointOnRoads(doorX, doorZ);
-  const pathDist = Math.hypot(nearestRoad.x - doorX, nearestRoad.z - doorZ);
-  if (pathDist > 0.35) {
-    const sidewalkGroup = new THREE.Group();
-    // Fő járdafelület (kavicsos/díszköves járda)
-    const walkMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1.65, 0.05, pathDist),
-      envRefs.roadMat || mat(0xc8b082)
-    );
-    walkMesh.receiveShadow = true;
-    sidewalkGroup.add(walkMesh);
+  // Kerti gyalogjárda a ház bejáratától a legközelebbi közterületi járdáig (getClosestSidewalkPoint)
+  const [doorX, doorZ] = getDoorWorldPos(res, styleIdx);
+  const nearestSw = getClosestSidewalkPoint(doorX, doorZ);
+  addGardenWalkway(
+    doorX, doorZ,
+    nearestSw.x, nearestSw.z,
+    hasDriveway ? 1.0 : 1.35,
+    0.055, 0.03,
+    envRefs.sidewalkMat || mat(0xd2cab8),
+    0x8f8474
+  );
 
-    // Kétoldali szegélykő a járda mentén
-    const curbMat = mat(0x8f8474);
-    const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, pathDist), curbMat);
-    curbLeft.position.x = -0.85;
-    const curbRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, pathDist), curbMat);
-    curbRight.position.x = 0.85;
-    curbLeft.receiveShadow = true;
-    curbRight.receiveShadow = true;
-    sidewalkGroup.add(curbLeft, curbRight);
-
-    sidewalkGroup.position.set((doorX + nearestRoad.x) / 2, 0.032, (doorZ + nearestRoad.z) / 2);
-    sidewalkGroup.rotation.y = Math.atan2(nearestRoad.x - doorX, nearestRoad.z - doorZ);
-    scene.add(sidewalkGroup);
+  // Kocsifeljáró a garázstól / carporttól közvetlenül a 2 sávos autóút aszfalt széléig
+  if (hasDriveway) {
+    const rot = res.rot || 0;
+    const sin = Math.sin(rot);
+    const cos = Math.cos(rot);
+    const mouthLX = styleIdx === 1 ? 2.05 : 2.25;
+    const mouthLZ = styleIdx === 1 ? 2.38 : -1.55;
+    const mouthX = res.x + mouthLX * cos + mouthLZ * sin;
+    const mouthZ = res.z - mouthLX * sin + mouthLZ * cos;
+    const nearestRoad = getClosestPointOnRoads(mouthX, mouthZ);
+    const dx = nearestRoad.x - mouthX;
+    const dz = nearestRoad.z - mouthZ;
+    const totalDist = Math.hypot(dx, dz);
+    const roadEdgeOffset = CAR_ROAD_WIDTH / 2 - 0.10;
+    if (totalDist > roadEdgeOffset + 0.4) {
+      const ratio = (totalDist - roadEdgeOffset) / totalDist;
+      const endX = mouthX + dx * ratio;
+      const endZ = mouthZ + dz * ratio;
+      const driveMat = styleIdx === 1 ? (envRefs.roadMat || mat(0x3e4248)) : mat(0x8e959e);
+      addGardenWalkway(mouthX, mouthZ, endX, endZ, 2.1, 0.098, 0.049, driveMat, 0x6f757e);
+    }
   }
 
   return g;
@@ -2087,17 +2707,67 @@ function updatePlotCapacityUI() {
   }
 }
 
+const NPC_SLICE_SEC = 7;
+const NPC_CYCLE_SLICES = 240;
+const NPC_CYCLE_SEC = NPC_SLICE_SEC * NPC_CYCLE_SLICES; // 1680s (28 min) ciklus
+
+function ensureNpcScheduleProfile(res) {
+  if (res.npcSchedule) return res.npcSchedule;
+  const prefixDist = new Float32Array(NPC_CYCLE_SLICES + 1);
+  const pauseDurs = new Float32Array(NPC_CYCLE_SLICES);
+  const sliceModes = new Uint8Array(NPC_CYCLE_SLICES); // 0 = walk, 1 = idle->walk, 2 = run
+  const preSpeeds = new Float32Array(NPC_CYCLE_SLICES);
+
+  let acc = 0;
+  for (let i = 0; i < NPC_CYCLE_SLICES; i++) {
+    prefixDist[i] = acc;
+    const h = hash(res.name, 500 + i);
+    if (h < 0.16) {
+      // Megállás (3 - 7 másodpercig nézelődik a járdán), majd a szelet végén továbbindul
+      const pauseDur = 3.0 + hash(res.name, 600 + i) * 4.0;
+      const walkAfter = Math.max(0, NPC_SLICE_SEC - pauseDur);
+      const speed = Math.min(MAX_NPC_SPEED, 1.25 + hash(res.name, 700 + i) * 0.90);
+      sliceModes[i] = 1;
+      pauseDurs[i] = pauseDur;
+      preSpeeds[i] = speed;
+      acc += walkAfter * speed;
+    } else if (h < 0.34) {
+      // Futás / sietés (3.2 - 4.5 m/s, max MAX_NPC_SPEED)
+      const speed = Math.min(MAX_NPC_SPEED, 3.2 + hash(res.name, 900 + i) * 1.3);
+      sliceModes[i] = 2;
+      pauseDurs[i] = 0;
+      preSpeeds[i] = speed;
+      acc += NPC_SLICE_SEC * speed;
+    } else {
+      // Dinamikus séta (1.15 - 2.50 m/s)
+      const speed = Math.min(MAX_NPC_SPEED, 1.15 + hash(res.name, 700 + i) * 1.35);
+      sliceModes[i] = 0;
+      pauseDurs[i] = 0;
+      preSpeeds[i] = speed;
+      acc += NPC_SLICE_SEC * speed;
+    }
+  }
+  prefixDist[NPC_CYCLE_SLICES] = acc;
+  res.npcSchedule = {
+    prefixDist,
+    pauseDurs,
+    sliceModes,
+    preSpeeds,
+    cycleTotalDist: acc,
+  };
+  return res.npcSchedule;
+}
+
 function addResidentToWorld(raw) {
-  const doorDist = 2.9;
-  const door = [
-    raw.x + Math.sin(raw.rot || 0) * doorDist,
-    raw.z + Math.cos(raw.rot || 0) * doorDist,
-  ];
+  const styleIdx = getHouseStyleIndex(raw);
+  const door = getDoorWorldPos(raw, styleIdx);
   const res = {
     ...raw,
+    houseStyle: styleIdx,
     door,
     speed: 1.8 + hash(raw.name, 3) * 0.6,
   };
+  ensureNpcScheduleProfile(res);
   res.houseGroup = createHouseGroup(res);
   res.figureGroup = createVillagerGroup(res);
   residents.push(res);
@@ -2114,87 +2784,313 @@ villageData.residents.forEach(addResidentToWorld);
 updateClaimButtonUI();
 updateMyHomeBeaconPosition();
 
-// --- 7. Determinisztikus Falusi Élet, Séta az Utcákon és Alvásrend ---
-const VILLAGE_CIRCUITS = {
-  SW_MAIN: [
-    [-11, 20], [-19, 24], [-28, 30], [-31, 44], [-16, 46], [-4, 38], [0, 36], [0, 20]
+// --- 7. Determinisztikus Falusi Élet, Szigorú Járda/Híd Közlekedés, Dinamikus Sebesség ---
+const SIDEWALK_CIRCUITS = {
+  SOUTH_CENTER: [
+    [-2.85, 8.6], [-2.85, 17.15], [-2.85, 22.85], [-2.85, 39.15],
+    [2.85, 39.15], [2.85, 22.85], [2.85, 17.15], [2.85, 8.6], [-2.85, 8.6],
   ],
-  SE_MAIN: [
-    [12, 20], [20, 25], [30, 32], [32, 46], [14, 46], [4, 38], [0, 36], [0, 20]
+  SOUTH_WEST: [
+    [-2.85, 17.15], [-46, 17.15], [-2.85, 17.15], [-2.85, 22.85],
+    [-52, 22.85], [-2.85, 22.85], [-2.85, 39.15], [-52, 39.15],
+    [-2.85, 39.15], [-2.85, 44.85], [2.85, 44.85], [2.85, 39.15],
+    [2.85, 22.85], [2.85, 17.15], [-2.85, 17.15],
   ],
-  WEST_VADON: [
-    [-14, 3.5], [-28, -1], [-38, 4], [-48, 4], [-54, 4], [-48, 4], [-38, 4], [-14, 3.5], [-11, 20], [0, 20], [0, 3.5]
+  SOUTH_EAST: [
+    [2.85, 39.15], [52, 39.15], [2.85, 39.15], [2.85, 44.85],
+    [52, 44.85], [2.85, 44.85], [-2.85, 44.85], [-2.85, 39.15],
+    [-2.85, 22.85], [-2.85, 17.15], [-2.85, 8.6], [2.85, 8.6],
+    [2.85, 17.15], [2.85, 22.85], [2.85, 39.15],
   ],
-  EAST_HORGASZ: [
-    [14, 3.5], [26, 3.5], [36, 3], [44, 5], [52, 4], [44, 5], [36, 3], [14, 3.5], [12, 20], [0, 20], [0, 3.5]
+  WEST_AVE: [
+    [-2.85, 6.35], [-4.8, 6.35], [-56, 6.35], [-4.8, 6.35],
+    [-4.8, 0.65], [-56, 0.65], [-4.8, 0.65], [-2.85, 0.65],
+    [-2.85, -1.4], [2.85, -1.4], [2.85, 0.65], [2.85, 6.35],
+    [2.85, 8.6], [-2.85, 8.6], [-2.85, 6.35],
   ],
-  NW_MAIN: [
-    [-36, -34],
-    [-34, -42],
-    [-24, -48],
-    [-14, -48],
-    [-14, -28],
-    [0, -28],
-    [0, -36],
-    [0, -48],
-    [-14, -48],
-    [-24, -48]
+  EAST_AVE: [
+    [2.85, 6.35], [4.8, 6.35], [54, 6.35], [4.8, 6.35],
+    [4.8, 0.65], [54, 0.65], [4.8, 0.65], [2.85, 0.65],
+    [2.85, -1.4], [-2.85, -1.4], [-2.85, 0.65], [-2.85, 6.35],
+    [-2.85, 8.6], [2.85, 8.6], [2.85, 6.35],
   ],
-  NE_MAIN: [
-    [0, -28],
-    [14, -28],
-    [24, -24],
-    [34, -24],
-    [44, -26],
-    [48, -36],
-    [44, -48],
-    [0, -48],
-    [0, -36]
+  NORTH_WEST: [
+    [-2.85, -20.1], [-2.85, -33.15], [-2.85, -41.15], [-54, -41.15],
+    [-2.85, -41.15], [-2.85, -46.85], [-54, -46.85], [-2.85, -46.85],
+    [-2.85, -53], [-2.85, -46.85], [-2.85, -41.15], [2.85, -41.15],
+    [2.85, -38.85], [2.85, -33.15], [2.85, -20.1], [-2.85, -20.1],
   ],
-  FOTER_SOUTH: [
-    [0, 3.5], [0, 20], [12, 20], [20, 25], [30, 32], [4, 38], [0, 36], [-4, 38], [-11, 20], [0, 20]
-  ]
+  NORTH_EAST: [
+    [2.85, -20.1], [2.85, -33.15], [54, -33.15], [2.85, -33.15],
+    [2.85, -38.85], [54, -38.85], [2.85, -38.85], [2.85, -41.15],
+    [-2.85, -41.15], [-2.85, -33.15], [2.85, -33.15], [2.85, -20.1],
+  ],
+  BRIDGE_CROSS_W: [
+    [-2.85, 8.6], [-2.85, 6.35], [-2.85, 0.65], [-2.85, -1.4],
+    [-2.85, -7.9], [-2.85, -20.1], [-2.85, -41.15], [-34, -41.15],
+    [-2.85, -41.15], [-2.85, -46.85], [-34, -46.85], [-2.85, -46.85],
+    [-2.85, -41.15], [-2.85, -20.1], [-2.85, -7.9], [-2.85, -1.4],
+    [-2.85, 0.65], [-2.85, 6.35], [-2.85, 8.6], [2.85, 8.6],
+    [2.85, 17.15], [-2.85, 17.15], [-2.85, 8.6],
+  ],
+  BRIDGE_CROSS_E: [
+    [2.85, 8.6], [2.85, 6.35], [2.85, 0.65], [2.85, -1.4],
+    [2.85, -7.9], [2.85, -20.1], [2.85, -33.15], [34, -33.15],
+    [2.85, -33.15], [2.85, -38.85], [34, -38.85], [2.85, -38.85],
+    [2.85, -33.15], [2.85, -20.1], [2.85, -7.9], [2.85, -1.4],
+    [2.85, 0.65], [2.85, 6.35], [2.85, 8.6], [-2.85, 8.6],
+    [-2.85, 17.15], [2.85, 17.15], [2.85, 8.6],
+  ],
 };
+
+// Csomóponti járdagráf: minden él szigorúan járda vagy kijelölt zebra
+const SIDEWALK_GRAPH_NODES = {
+  B_NW: [-2.85, -20.1], B_NE: [2.85, -20.1],
+  B_SW: [-2.85, -7.9],  B_SE: [2.85, -7.9],
+  F_NW: [-2.85, -1.4],  F_NE: [2.85, -1.4],
+  F_C_NW: [-2.85, 0.65], F_C_NE: [2.85, 0.65],
+  F_C_SW: [-2.85, 6.35], F_C_SE: [2.85, 6.35],
+  F_W_N: [-4.8, 0.65],  F_W_S: [-4.8, 6.35],
+  F_E_N: [4.8, 0.65],   F_E_S: [4.8, 6.35],
+  F_SW: [-2.85, 8.6],   F_SE: [2.85, 8.6],
+  SW_NW: [-2.85, 17.15], SW_NE: [2.85, 17.15],
+  SW_SW: [-2.85, 22.85], SW_SE: [2.85, 22.85],
+  SC_NW: [-2.85, 39.15], SC_NE: [2.85, 39.15],
+  SC_SW: [-2.85, 44.85], SC_SE: [2.85, 44.85],
+  NE_SW: [-2.85, -33.15], NE_SE: [2.85, -33.15], NE_NE: [2.85, -38.85],
+  NW_SW: [-2.85, -41.15], NW_SE: [2.85, -41.15], NW_NW: [-2.85, -46.85],
+};
+
+const SIDEWALK_GRAPH_EDGES = [
+  ['B_NW', 'B_SW'], ['B_NE', 'B_SE'], ['B_NW', 'B_NE'], ['B_SW', 'B_SE'],
+  ['B_SW', 'F_NW'], ['B_SE', 'F_NE'],
+  ['F_NW', 'F_NE'], ['F_NW', 'F_C_NW'], ['F_NE', 'F_C_NE'],
+  ['F_C_NW', 'F_W_N'], ['F_C_NE', 'F_E_N'], ['F_W_N', 'F_W_S'], ['F_E_N', 'F_E_S'],
+  ['F_W_S', 'F_C_SW'], ['F_E_S', 'F_C_SE'],
+  ['F_C_NW', 'F_C_SW'], ['F_C_NE', 'F_C_SE'],
+  ['F_C_SW', 'F_SW'], ['F_C_SE', 'F_SE'], ['F_SW', 'F_SE'],
+  ['F_SW', 'SW_NW'], ['SW_NW', 'SW_SW'], ['SW_SW', 'SC_NW'], ['SC_NW', 'SC_SW'],
+  ['F_SE', 'SW_NE'], ['SW_NE', 'SW_SE'], ['SW_SE', 'SC_NE'], ['SC_NE', 'SC_SE'],
+  ['SW_NW', 'SW_NE'], ['SW_SW', 'SW_SE'], ['SC_NW', 'SC_NE'], ['SC_SW', 'SC_SE'],
+  ['B_NW', 'NE_SW'], ['NE_SW', 'NW_SW'], ['NW_SW', 'NW_NW'],
+  ['B_NE', 'NE_SE'], ['NE_SE', 'NE_NE'], ['NE_NE', 'NW_SE'],
+  ['NE_SW', 'NE_SE'], ['NW_SW', 'NW_SE'],
+];
+
+const SIDEWALK_ADJ = (() => {
+  const adj = {};
+  for (const id of Object.keys(SIDEWALK_GRAPH_NODES)) adj[id] = [];
+  for (const [a, b] of SIDEWALK_GRAPH_EDGES) {
+    const [ax, az] = SIDEWALK_GRAPH_NODES[a];
+    const [bx, bz] = SIDEWALK_GRAPH_NODES[b];
+    const w = Math.hypot(bx - ax, bz - az);
+    adj[a].push({ to: b, w });
+    adj[b].push({ to: a, w });
+  }
+  return adj;
+})();
+
+function findSidewalkNodeId(x, z, bankIsNorth) {
+  let bestId = null;
+  let bestDist = Infinity;
+  for (const [id, pt] of Object.entries(SIDEWALK_GRAPH_NODES)) {
+    if (bankIsNorth !== undefined && (pt[1] < riverZ(pt[0])) !== bankIsNorth) continue;
+    const d = Math.hypot(pt[0] - x, pt[1] - z);
+    if (d < bestDist) {
+      bestDist = d;
+      bestId = id;
+    }
+  }
+  return bestId;
+}
+
+function findSidewalkEntryNodeId(sw) {
+  const bankIsNorth = sw.z < riverZ(sw.x);
+  if (sw.seg && Math.abs(sw.seg.x2 - sw.seg.x1) > Math.abs(sw.seg.z2 - sw.seg.z1)) {
+    // Vízszintes utca járdája: azonos Z járdavonal csomópontja
+    let bestId = null;
+    let bestDx = Infinity;
+    for (const [id, pt] of Object.entries(SIDEWALK_GRAPH_NODES)) {
+      if ((pt[1] < riverZ(pt[0])) !== bankIsNorth) continue;
+      if (Math.abs(pt[1] - sw.z) < 0.25) {
+        const dx = Math.abs(pt[0] - sw.x);
+        if (dx < bestDx) {
+          bestDx = dx;
+          bestId = id;
+        }
+      }
+    }
+    if (bestId) return bestId;
+  }
+  if (sw.seg && Math.abs(sw.seg.z2 - sw.seg.z1) > Math.abs(sw.seg.x2 - sw.seg.x1)) {
+    // Függőleges utca járdája (main_south, main_north, main_bridge_s): azonos X oldal
+    let bestId = null;
+    let bestDz = Infinity;
+    for (const [id, pt] of Object.entries(SIDEWALK_GRAPH_NODES)) {
+      if ((pt[1] < riverZ(pt[0])) !== bankIsNorth) continue;
+      if (Math.abs(pt[0] - sw.x) < 0.25) {
+        const dz = Math.abs(pt[1] - sw.z);
+        if (dz < bestDz) {
+          bestDz = dz;
+          bestId = id;
+        }
+      }
+    }
+    if (bestId) return bestId;
+  }
+  return findSidewalkNodeId(sw.x, sw.z, bankIsNorth);
+}
+
+function findSidewalkGraphPath(startId, endId) {
+  if (!startId || !endId) return [];
+  if (startId === endId) return [SIDEWALK_GRAPH_NODES[startId].slice()];
+  const dist = { [startId]: 0 };
+  const prev = {};
+  const unvisited = new Set(Object.keys(SIDEWALK_GRAPH_NODES));
+  while (unvisited.size > 0) {
+    let u = null;
+    let uDist = Infinity;
+    for (const id of unvisited) {
+      const d = dist[id] !== undefined ? dist[id] : Infinity;
+      if (d < uDist) {
+        uDist = d;
+        u = id;
+      }
+    }
+    if (!u || !Number.isFinite(uDist) || u === endId) break;
+    unvisited.delete(u);
+    for (const edge of SIDEWALK_ADJ[u]) {
+      if (!unvisited.has(edge.to)) continue;
+      const alt = uDist + edge.w;
+      if (alt < (dist[edge.to] !== undefined ? dist[edge.to] : Infinity)) {
+        dist[edge.to] = alt;
+        prev[edge.to] = u;
+      }
+    }
+  }
+  if (prev[endId] === undefined) return [];
+  const chain = [];
+  let cur = endId;
+  while (cur) {
+    chain.push(SIDEWALK_GRAPH_NODES[cur].slice());
+    cur = prev[cur];
+  }
+  chain.reverse();
+  return chain;
+}
+
+function dedupeRoutePoints(pts) {
+  const out = [];
+  for (const pt of pts) {
+    if (!pt) continue;
+    const prev = out[out.length - 1];
+    if (!prev || Math.hypot(pt[0] - prev[0], pt[1] - prev[1]) > 0.05) {
+      out.push([pt[0], pt[1]]);
+    }
+  }
+  return out;
+}
+
+function segmentCrossesRiverOffBridge(ax, az, bx, bz) {
+  const SAMPLES = 12;
+  for (let s = 1; s < SAMPLES; s++) {
+    const t = s / SAMPLES;
+    const x = ax + (bx - ax) * t;
+    const z = az + (bz - az) * t;
+    if (Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH + 0.6 && Math.abs(x - BRIDGE.x) > 3.1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function ensureBridgeOnlySidewalkPath(pts) {
+  if (!pts || pts.length < 2) return pts || [];
+  const safe = [pts[0].slice()];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = safe[safe.length - 1];
+    const [bx, bz] = pts[i];
+    const aNorth = az < riverZ(ax);
+    const bNorth = bz < riverZ(bx);
+    if (aNorth !== bNorth || segmentCrossesRiverOffBridge(ax, az, bx, bz)) {
+      if (Math.abs(ax - BRIDGE.x) > 3.1 || Math.abs(bx - BRIDGE.x) > 3.1) {
+        const swA = getClosestSidewalkPoint(ax, az);
+        const swB = getClosestSidewalkPoint(bx, bz);
+        const sideX = (ax + bx) >= 0 ? SIDEWALK_OFFSET : -SIDEWALK_OFFSET;
+        const nA = findSidewalkEntryNodeId(swA) || (aNorth ? (sideX < 0 ? 'B_NW' : 'B_NE') : (sideX < 0 ? 'B_SW' : 'B_SE'));
+        const nB = findSidewalkEntryNodeId(swB) || (bNorth ? (sideX < 0 ? 'B_NW' : 'B_NE') : (sideX < 0 ? 'B_SW' : 'B_SE'));
+        const bridgeDetour = findSidewalkGraphPath(nA, nB);
+        if (Math.hypot(swA.x - ax, swA.z - az) > 0.1) safe.push([swA.x, swA.z]);
+        for (const p of bridgeDetour) safe.push(p);
+        if (Math.hypot(bx - swB.x, bz - swB.z) > 0.1) safe.push([swB.x, swB.z]);
+        safe.push([bx, bz]);
+        continue;
+      }
+    }
+    safe.push([bx, bz]);
+  }
+  return dedupeRoutePoints(safe);
+}
 
 function getResidentStreetRoute(res) {
   if (res.cachedRoute) return res.cachedRoute;
   const doorX = res.door[0];
   const doorZ = res.door[1];
-  const nr = getClosestPointOnRoads(doorX, doorZ);
+  const sw = getClosestSidewalkPoint(doorX, doorZ);
+  const resIsNorth = res.z < riverZ(res.x);
 
-  let circ = VILLAGE_CIRCUITS.FOTER_SOUTH;
-  if (res.z < 0) {
-    circ = res.x < 0 ? VILLAGE_CIRCUITS.NW_MAIN : VILLAGE_CIRCUITS.NE_MAIN;
+  let circ;
+  if ((Number(res.id) || 0) % 3 === 0) {
+    circ = res.x < 0 ? SIDEWALK_CIRCUITS.BRIDGE_CROSS_W : SIDEWALK_CIRCUITS.BRIDGE_CROSS_E;
+  } else if (resIsNorth) {
+    circ = res.x < 0 ? SIDEWALK_CIRCUITS.NORTH_WEST : SIDEWALK_CIRCUITS.NORTH_EAST;
   } else {
-    if (res.x < -20 && res.z < 15) circ = VILLAGE_CIRCUITS.WEST_VADON;
-    else if (res.x > 25 && res.z < 15) circ = VILLAGE_CIRCUITS.EAST_HORGASZ;
-    else if (res.x < 0) circ = VILLAGE_CIRCUITS.SW_MAIN;
-    else circ = VILLAGE_CIRCUITS.SE_MAIN;
+    if (res.x < -12 && res.z < 12) circ = SIDEWALK_CIRCUITS.WEST_AVE;
+    else if (res.x > 12 && res.z < 12) circ = SIDEWALK_CIRCUITS.EAST_AVE;
+    else if (res.x < -6 && res.z >= 12) circ = SIDEWALK_CIRCUITS.SOUTH_WEST;
+    else if (res.x > 6 && res.z >= 12) circ = SIDEWALK_CIRCUITS.SOUTH_EAST;
+    else circ = SIDEWALK_CIRCUITS.SOUTH_CENTER;
   }
 
-  // Megkeressük a legközelebbi csomópontot a járdavéghez
-  let bestIdx = 0, bestDist = Infinity;
+  // Csak azonos folyóparton lévő csomópontot választunk a körút nyitópontjának
+  let bestIdx = -1;
+  let bestDist = Infinity;
   circ.forEach((pt, i) => {
-    const d = Math.hypot(pt[0] - nr.x, pt[1] - nr.z);
+    if ((pt[1] < riverZ(pt[0])) !== resIsNorth) return;
+    if (Math.abs(pt[0]) > 5.0) return;
+    const d = Math.hypot(pt[0] - sw.x, pt[1] - sw.z);
     if (d < bestDist) {
       bestDist = d;
       bestIdx = i;
     }
   });
+  if (bestIdx < 0) bestIdx = 0;
 
+  // Zárt körút forgatása (utolsó elem az eredeti körút zárása, ezért circ.length - 1 egyedi csúcs)
+  const ringLen = circ.length > 1 && Math.hypot(circ[0][0] - circ[circ.length - 1][0], circ[0][1] - circ[circ.length - 1][1]) < 0.05
+    ? circ.length - 1
+    : circ.length;
   const loop = [];
-  for (let i = 0; i < circ.length; i++) {
-    loop.push(circ[(bestIdx + i) % circ.length]);
+  for (let i = 0; i < ringLen; i++) {
+    loop.push(circ[(bestIdx + i) % ringLen]);
   }
-  loop.push(circ[bestIdx]);
+  loop.push(circ[bestIdx % ringLen]);
 
-  const pts = [
+  const entryNodeId = findSidewalkEntryNodeId(sw);
+  const loopStartId = findSidewalkNodeId(loop[0][0], loop[0][1], resIsNorth);
+  const entryGraphPath = findSidewalkGraphPath(entryNodeId, loopStartId);
+  const exitGraphPath = entryGraphPath.length > 1 ? entryGraphPath.slice(0, -1).reverse() : [];
+
+  const rawPts = [
     [doorX, doorZ],
-    [nr.x, nr.z],
+    [sw.x, sw.z],
+    ...entryGraphPath,
     ...loop,
-    [nr.x, nr.z],
-    [doorX, doorZ]
+    ...exitGraphPath,
+    [sw.x, sw.z],
+    [doorX, doorZ],
   ];
+  const pts = ensureBridgeOnlySidewalkPath(dedupeRoutePoints(rawPts));
   res.cachedRoute = measureRoute(pts);
   return res.cachedRoute;
 }
@@ -2210,14 +3106,15 @@ function buildWaypoints(x1, z1, x2, z2) {
   const side1 = z1 > riverZ(x1);
   const side2 = z2 > riverZ(x2);
   if (side1 === side2) return [[x1, z1], [x2, z2]];
-  const firstBridgeZ = side1 ? BRIDGE.southZ : BRIDGE.northZ;
-  const secondBridgeZ = side1 ? BRIDGE.northZ : BRIDGE.southZ;
-  return [
+  const sideX = (x1 + x2) >= 0 ? SIDEWALK_OFFSET : -SIDEWALK_OFFSET;
+  const firstBridgeZ = side1 ? BRIDGE.southZ + 0.6 : BRIDGE.northZ - 0.6;
+  const secondBridgeZ = side1 ? BRIDGE.northZ - 0.6 : BRIDGE.southZ + 0.6;
+  return ensureBridgeOnlySidewalkPath([
     [x1, z1],
-    [BRIDGE.x, firstBridgeZ],
-    [BRIDGE.x, secondBridgeZ],
+    [sideX, firstBridgeZ],
+    [sideX, secondBridgeZ],
     [x2, z2],
-  ];
+  ]);
 }
 
 function measureRoute(points) {
@@ -2226,7 +3123,11 @@ function measureRoute(points) {
     const d = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
     lengths.push(lengths[i - 1] + d);
   }
-  return { points, lengths, total: lengths[lengths.length - 1] || 0.01 };
+  const total = lengths[lengths.length - 1] || 0.01;
+  const entryDist = lengths.length >= 2 ? lengths[1] : 0;
+  const exitDist = lengths.length >= 2 ? lengths[lengths.length - 2] : total;
+  const loopSpan = Math.max(0.01, exitDist - entryDist);
+  return { points, lengths, total, entryDist, exitDist, loopSpan };
 }
 
 function positionAlong(route, dist) {
@@ -2245,6 +3146,33 @@ function positionAlong(route, dist) {
   };
 }
 
+function computeDynamicProgress(res, elapsedSec) {
+  const sched = ensureNpcScheduleProfile(res);
+  const t = Math.max(0, elapsedSec);
+  const cycleIdx = Math.floor(t / NPC_CYCLE_SEC);
+  const modT = t - cycleIdx * NPC_CYCLE_SEC;
+  const slot = Math.min(NPC_CYCLE_SLICES - 1, Math.floor(modT / NPC_SLICE_SEC));
+  const dt = modT - slot * NPC_SLICE_SEC;
+
+  const baseDist = cycleIdx * sched.cycleTotalDist + sched.prefixDist[slot];
+  const sMode = sched.sliceModes[slot];
+  const preSpeed = sched.preSpeeds[slot];
+
+  if (sMode === 1) {
+    const pauseDur = sched.pauseDurs[slot];
+    if (dt < pauseDur) {
+      return { mode: 'idle', speed: 0, dist: baseDist };
+    }
+    const moveDt = dt - pauseDur;
+    return { mode: 'walk', speed: preSpeed, dist: baseDist + moveDt * preSpeed };
+  }
+  return {
+    mode: sMode === 2 ? 'run' : 'walk',
+    speed: preSpeed,
+    dist: baseDist + dt * preSpeed,
+  };
+}
+
 function whereIs(res, sec) {
   const bedtimeHour = 19.0 + hash(res.name, 11) * 3.0; // Random 19:00 - 22:00 között
   const wakeHour = 5.0 + hash(res.name, 12) * 3.0;    // Random 5:00 - 8:00 között
@@ -2256,56 +3184,77 @@ function whereIs(res, sec) {
   if (isSleeping) {
     return {
       mode: 'sleep',
+      returning: false,
       x: res.door[0],
       z: res.door[1],
       heading: res.rot || 0,
+      speed: 0,
+      dist: 0,
       visible: false,
     };
   }
 
-  // 2. Este a lefekvés előtti 90 másodpercben a járdán besétál a házába
-  const returnWindow = 90;
-  if (sec >= bedtimeSec - returnWindow && sec < bedtimeSec) {
-    const route = getResidentStreetRoute(res);
-    const pDoor = route.points[0];
-    const pRoad = route.points[1];
-    const t = (sec - (bedtimeSec - returnWindow)) / returnWindow;
-    const x = pRoad[0] + (pDoor[0] - pRoad[0]) * t;
-    const z = pRoad[1] + (pDoor[1] - pRoad[1]) * t;
-    return {
-      mode: 'walk',
-      x,
-      z,
-      heading: Math.atan2(pDoor[0] - pRoad[0], pDoor[1] - pRoad[1]),
-      visible: true,
-    };
-  }
+  const route = getResidentStreetRoute(res);
+  const halfSpan = route.loopSpan * 0.5 + route.entryDist;
+  const returnWindow = Math.max(90, Math.ceil(halfSpan / 2.2));
+  const returnStart = Math.max(wakeSec + 60, bedtimeSec - returnWindow);
 
-  // 3. Reggeli ébredéskor az első 60 másodpercben a házból kilép a járdán az utcára
+  // 2. Reggeli ébredéskor az első 60 másodpercben a házból kilép a kerti járdán a közterületi járdára
   if (sec >= wakeSec && sec < wakeSec + 60) {
-    const route = getResidentStreetRoute(res);
     const pDoor = route.points[0];
-    const pRoad = route.points[1];
+    const pRoad = route.points[1] || route.points[0];
     const t = (sec - wakeSec) / 60;
     const x = pDoor[0] + (pRoad[0] - pDoor[0]) * t;
     const z = pDoor[1] + (pRoad[1] - pDoor[1]) * t;
     return {
       mode: 'walk',
+      returning: false,
       x,
       z,
       heading: Math.atan2(pRoad[0] - pDoor[0], pRoad[1] - pDoor[1]),
+      speed: route.entryDist / 60,
+      dist: route.entryDist * t,
       visible: true,
     };
   }
 
-  // 4. Nappali folyamatos séta a falu utcáin
-  const route = getResidentStreetRoute(res);
-  const elapsed = sec - wakeSec;
-  const dist = (elapsed * res.speed) % route.total;
-  const p = positionAlong(route, dist);
+  // 3. Esti ugrásmentes, szigorúan járda/híd-alapú hazatérés a legrövidebb irányban
+  if (sec >= returnStart && sec < bedtimeSec) {
+    const progSwitch = computeDynamicProgress(res, Math.max(0, returnStart - (wakeSec + 60)));
+    const posAtSwitch = route.entryDist + (progSwitch.dist % route.loopSpan);
+    const fwdDist = route.total - posAtSwitch;
+    const bwdDist = posAtSwitch;
+    const goForward = fwdDist <= bwdDist;
+    const remDist = goForward ? fwdDist : bwdDist;
+    const t = Math.max(0, Math.min(1, (sec - returnStart) / returnWindow));
+    const distNow = goForward ? (posAtSwitch + remDist * t) : (posAtSwitch - remDist * t);
+    const p = positionAlong(route, distNow);
+    const retSpeed = Math.min(MAX_NPC_SPEED, remDist / returnWindow);
+    return {
+      mode: 'walk',
+      returning: true,
+      x: p.x,
+      z: p.z,
+      heading: goForward ? p.heading : (p.heading + Math.PI),
+      speed: retSpeed,
+      dist: progSwitch.dist + remDist * t,
+      visible: true,
+    };
+  }
+
+  // 4. Nappali dinamikus járdaséta, megállások és futás (kizárólag közterületi járdán és hídon)
+  const elapsed = Math.max(0, sec - (wakeSec + 60));
+  const prog = computeDynamicProgress(res, elapsed);
+  const routeDist = route.entryDist + (prog.dist % route.loopSpan);
+  const p = positionAlong(route, routeDist);
   return {
-    mode: 'walk',
-    ...p,
+    mode: prog.mode,
+    returning: false,
+    x: p.x,
+    z: p.z,
+    heading: p.heading,
+    speed: prog.speed,
+    dist: prog.dist,
     visible: true,
   };
 }
@@ -3269,20 +4218,26 @@ function statusTextFor(res, sec) {
   const bStr = String(bh).padStart(2, '0') + ':' + String(bm).padStart(2, '0');
   const wStr = String(wh).padStart(2, '0') + ':' + String(wm).padStart(2, '0');
 
-  const isSleeping = (sec >= bedtimeSec || sec < wakeSec);
-  if (isSleeping) {
+  const st = whereIs(res, sec);
+  if (st.mode === 'sleep') {
     return `🌙 Otthon alszik a házában (${bStr} - ${wStr})`;
   }
 
-  if (sec >= bedtimeSec - 90 && sec < bedtimeSec) {
-    return `🏡 Épp a járdán lép be a házába aludni (${bStr})`;
+  if (st.returning) {
+    return `🏡 Épp a járdán hazafelé sétál aludni (${bStr})`;
   }
 
   if (sec >= wakeSec && sec < wakeSec + 60) {
     return `☀️ Épp kilép a házából az utcára sétálni (${wStr})`;
   }
 
-  return '🚶 Épp folyamatosan sétál a falusi utcán';
+  if (st.mode === 'idle') {
+    return '👀 Épp megállt körülnézni a járdán';
+  }
+  if (st.mode === 'run') {
+    return '🏃 Épp kocog / siet a járdán';
+  }
+  return '🚶 Épp sétál a falusi járdán';
 }
 
 function buildResidentDiary(res, upToSec) {
@@ -5136,27 +6091,30 @@ window.addEventListener('blur', () => {
 
 // --- 12.5 Ütközéskezelés (Collision Detection) és Automatikus Lépcsőzés (Auto-Stepping) ---
 function getGroundHeight(x, z, includeProps = true) {
-  // 1. Fahíd (Bridge) átívelése a folyó felett
-  if (Math.abs(x - BRIDGE.x) < 2.0 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8) {
-    const t = Math.max(0, Math.min(1, (z - BRIDGE.northZ) / (BRIDGE.southZ - BRIDGE.northZ)));
-    const arch = Math.sin(t * Math.PI) * 0.24;
-    return 0.45 + arch; // 0.45m - 0.69m emelt fahíd magasság
+  // 1. 2 sávos híd + gyalogjárdák a folyó felett (rámpa a zebrákhoz ±0.5m-en)
+  if (Math.abs(x - BRIDGE.x) < 3.4 && z <= BRIDGE.southZ + 0.5 && z >= BRIDGE.northZ - 0.5) {
+    const deckY = Math.abs(x - BRIDGE.x) >= 2.3 ? 0.62 : 0.56;
+    if (z <= BRIDGE.southZ && z >= BRIDGE.northZ) {
+      return deckY;
+    }
+    const rampDist = z > BRIDGE.southZ ? (z - BRIDGE.southZ) : (BRIDGE.northZ - z);
+    const k = Math.max(0, Math.min(1, 1 - rampDist / 0.5));
+    return 0.08 + (deckY - 0.08) * k;
   }
 
-  // 2. Főtér macskaköves díszemelvény és padok
+  // 2. Főtér macskaköves díszemelvény és átlós padok
   const distFoter = Math.hypot(x - PLACES.tuz.x, z - PLACES.tuz.z);
   if (distFoter < 5.2) {
-    // Főtéri padok (6 db pad r=3.95 távolságban, felmehet rá a karakter!)
-    if (includeProps && distFoter > 2.8) {
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        const bx = PLACES.tuz.x + Math.cos(a) * 3.95;
-        const bz = PLACES.tuz.z + Math.sin(a) * 3.95;
+    if (includeProps && distFoter > 2.2) {
+      const foterBenchAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+      for (const a of foterBenchAngles) {
+        const bx = PLACES.tuz.x + Math.cos(a) * 3.25;
+        const bz = PLACES.tuz.z + Math.sin(a) * 3.25;
         const dx = x - bx;
         const dz = z - bz;
         const lx = dx * Math.sin(a) - dz * Math.cos(a);
         const lz = dx * Math.cos(a) + dz * Math.sin(a);
-        if (Math.abs(lx) < 0.95 && Math.abs(lz) < 0.32) {
+        if (Math.abs(lx) < 0.90 && Math.abs(lz) < 0.30) {
           return 0.41; // Felment a padra!
         }
       }
@@ -5164,6 +6122,12 @@ function getGroundHeight(x, z, includeProps = true) {
     if (distFoter < 3.7) return 0.12; // Belső díszkör
     if (distFoter < 4.8) return 0.10; // Külső burkolat
   }
+
+  // 2b. Emelt járdák és városi aszfalt burkolat
+  const sw = getClosestSidewalkPoint(x, z);
+  if (sw.dist <= SIDEWALK_WIDTH * 0.5 + 0.06) return 0.09;
+  const nr = getClosestPointOnRoads(x, z);
+  if (nr.dist <= CAR_ROAD_WIDTH * 0.5) return 0.06;
 
   if (!includeProps) return 0.0;
 
@@ -5180,8 +6144,12 @@ function getGroundHeight(x, z, includeProps = true) {
 
   // 4. Házak előtti kőlépcső / küszöb
   for (const r of residents) {
-    const stepX = r.x + Math.sin(r.rot || 0) * 2.15;
-    const stepZ = r.z + Math.cos(r.rot || 0) * 2.15;
+    const styleIdx = getHouseStyleIndex(r);
+    const localStepX = styleIdx === 1 ? -0.9 : (styleIdx === 3 ? -1.2 : 0);
+    const localStepZ = styleIdx === 0 ? 2.28 : 2.05;
+    const rot = r.rot || 0;
+    const stepX = r.x + localStepX * Math.cos(rot) + localStepZ * Math.sin(rot);
+    const stepZ = r.z - localStepX * Math.sin(rot) + localStepZ * Math.cos(rot);
     const dx = x - stepX;
     const dz = z - stepZ;
     if (dx * dx + dz * dz < 0.85 * 0.85) {
@@ -5192,27 +6160,48 @@ function getGroundHeight(x, z, includeProps = true) {
   return 0.0;
 }
 
-function isObstacleBlocked(x, z, radius = 0.45) {
-  // A) Házak fala és teste (Collision: nem tudsz belemenni a falakba / nem tűnsz el a házban!)
-  for (const r of residents) {
-    const dx = x - r.x;
-    const dz = z - r.z;
-    if (dx * dx + dz * dz > 25) continue;
-    const rot = r.rot || 0;
-    const cos = Math.cos(-rot);
-    const sin = Math.sin(-rot);
-    const lx = dx * cos - dz * sin;
-    const lz = dx * sin + dz * cos;
+function isInsideHouseFootprint(r, x, z, radius = 0.45) {
+  const dx = x - r.x;
+  const dz = z - r.z;
+  if (dx * dx + dz * dz > 32) return false;
+  const rot = r.rot || 0;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  const lx = dx * cos - dz * sin;
+  const lz = dx * sin + dz * cos;
 
-    // Bejárati küszöb és lépcső zóna feloldása: a küszöbön és a bejárat előtt szabad a járás, nem akad be!
-    if (Math.abs(lx) < 0.95 && lz >= 1.65) {
-      continue;
+  const styleIdx = getHouseStyleIndex(r);
+  const doorLocal = getHouseDoorLocalPos(styleIdx);
+  if (Math.abs(lx - doorLocal.x) < 0.85 && lz >= doorLocal.z - 1.25) {
+    return false;
+  }
+
+  if (styleIdx === 1) {
+    if (lx > -2.6 - radius && lx < 0.8 + radius && lz > -2.0 - radius && lz < 1.8 + radius) return true;
+    if (lx > 0.8 - radius && lx < 3.3 + radius && lz > -2.0 - radius && lz < 2.4 + radius) return true;
+    return false;
+  }
+  if (styleIdx === 3) {
+    if (lx > -2.6 - radius && lx < 1.2 + radius && lz > -1.9 - radius && lz < 1.7 + radius) return true;
+    for (const [px, pz] of [[1.35, -1.55], [3.15, -1.55], [1.35, 1.55], [3.15, 1.55]]) {
+      if (Math.hypot(lx - px, lz - pz) < 0.14 + radius) return true;
     }
+    return false;
+  }
+  if (styleIdx === 2) {
+    return Math.abs(lx) < 2.1 + radius && lz > -1.9 - radius && lz < 1.7 + radius;
+  }
+  if (styleIdx === 4) {
+    return Math.abs(lx) < 2.0 + radius && lz > -2.0 - radius && lz < 1.8 + radius;
+  }
+  return Math.abs(lx) < 2.3 + radius && lz > -1.9 - radius && lz < 1.7 + radius;
+}
 
-    const halfW = 2.2 + radius;
-    const halfD = 1.9 + radius;
-    if (Math.abs(lx) < halfW && Math.abs(lz) < halfD) {
-      return true; // Ütközés a ház falaival!
+function isObstacleBlocked(x, z, radius = 0.45) {
+  // A) Házak fala és teste (stílus-specifikus L-szárny / garázs / carport oszlopokkal)
+  for (const r of residents) {
+    if (isInsideHouseFootprint(r, x, z, radius)) {
+      return true;
     }
   }
 
@@ -5228,9 +6217,9 @@ function isObstacleBlocked(x, z, radius = 0.45) {
     return true;
   }
 
-  // C) Folyó mély vize (csak a fahídon lehet átkelni, a víz blokkolva van)
+  // C) Folyó mély vize (csak a 2 sávos hídon lehet átkelni, a víz blokkolva van)
   const inRiver = Math.abs(z - riverZ(x)) < RIVER_HALF_WIDTH - 0.2;
-  const onBridge = Math.abs(x - BRIDGE.x) < 2.0 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8;
+  const onBridge = Math.abs(x - BRIDGE.x) < 3.4 && z <= BRIDGE.southZ + 0.8 && z >= BRIDGE.northZ - 0.8;
   if (inRiver && !onBridge) return true;
 
   // D) Világhatár
@@ -5366,20 +6355,12 @@ function updateWalker(dt) {
     }
   }
 
-  // Auto-unjam biztonsági védelem: ha a karakter valamiért mégis házfalba kerülne, kivezetjük a járdára
+  // Auto-unjam biztonsági védelem: ha a karakter valamiért mégis házfalba kerülne, kivezetjük a kerti bejárathoz
   for (const r of residents) {
-    const dx = walker.x - r.x;
-    const dz = walker.z - r.z;
-    if (dx * dx + dz * dz < 12) {
-      const rot = r.rot || 0;
-      const cos = Math.cos(-rot);
-      const sin = Math.sin(-rot);
-      const lx = dx * cos - dz * sin;
-      const lz = dx * sin + dz * cos;
-      if (Math.abs(lx) < 2.25 && lz < 1.7 && lz > -2.0) {
-        walker.x = r.x + Math.sin(rot) * 2.85;
-        walker.z = r.z + Math.cos(rot) * 2.85;
-      }
+    if (isInsideHouseFootprint(r, walker.x, walker.z, 0.08)) {
+      walker.x = r.door[0];
+      walker.z = r.door[1];
+      break;
     }
   }
 
@@ -5926,12 +6907,17 @@ function tick(now) {
 
     res.figureGroup.visible = !isSleeping || res === selectedRes;
     const groundY = getGroundHeight(st.x, st.z, false);
-    const isWalking = st.mode === 'walk';
-    const bob = isWalking ? Math.abs(Math.sin(t * 8.5 + i)) * 0.06 : 0;
+    const isMovingNpc = st.mode === 'walk' || st.mode === 'run';
+    const stepPhase = (st.dist || 0) * 2.1 + i;
+    const animSpeed = st.mode === 'run'
+      ? 1.25
+      : (isMovingNpc ? Math.min(1.0, (st.speed || 1.8) / 2.2) : 0);
+    const bobAmp = st.mode === 'run' ? 0.085 : (isMovingNpc ? 0.055 : 0);
+    const bob = isMovingNpc ? Math.abs(Math.sin(stepPhase)) * bobAmp : 0;
     res.figureGroup.position.set(st.x, groundY + bob, st.z);
     res.figureGroup.rotation.y = st.heading;
     if (res.figureGroup.visible) {
-      animateCharacterLimbs(res.figureGroup, t * 8.5 + i, isWalking ? 0.95 : 0);
+      animateCharacterLimbs(res.figureGroup, stepPhase, animSpeed);
     }
   }
 
