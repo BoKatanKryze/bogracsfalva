@@ -698,7 +698,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261115-1';
+const APP_VERSION = '20261115-2';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -2663,6 +2663,9 @@ function prepareDrawerOpen(drawerId) {
 function syncResponsiveUIState() {
   if (!canSyncResponsiveUI) return;
   const isMobile = isMobileViewport();
+  if (!isMobile && el('search')) {
+    el('search').hidden = false;
+  }
   const anyDrawerOpen = DRAWER_IDS.some((id) => Boolean(el(id) && !el(id).hidden));
   const cardOpen = Boolean(el('card') && !el('card').hidden);
 
@@ -4649,9 +4652,17 @@ el('brand-toggle-btn').addEventListener('click', () => {
 el('pills-toggle-btn').addEventListener('click', () => {
   const row = el('main-btn-row');
   const stats = el('player-stats-bar');
+  const searchBox = el('search');
   const nextHidden = !row.hidden;
   row.hidden = nextHidden;
-  stats.hidden = nextHidden;
+  if (isMobileViewport()) {
+    if (searchBox) searchBox.hidden = nextHidden;
+    if (stats) stats.hidden = false;
+    if (nextHidden && el('search-dropdown')) el('search-dropdown').hidden = true;
+  } else {
+    if (stats) stats.hidden = nextHidden;
+    if (searchBox) searchBox.hidden = false;
+  }
   el('pills-toggle-btn').textContent = nextHidden ? '☰ Menü ▸' : '☰ Menü ▾';
 });
 
@@ -4674,10 +4685,17 @@ el('room-editor-collapse').addEventListener('click', () => {
 });
 
 // Az Idő/Táj csúszka panel alapból összecsukva indul asztali és mobil nézetben is, hogy a felső sáv kompakt maradjon,
-// a Kamera részleteket pedig mobilon alapból összecsukjuk (1 érintéssel bármikor lenyithatók).
+// mobilon pedig a fő gombsor és a kereső alapból összecsukva indul (a státusz sáv viszont látható marad),
+// valamint a Kamera részleteket is alapból összecsukjuk.
 if (el('time-box') && el('brand-toggle-btn')) {
   el('time-box').hidden = true;
   el('brand-toggle-btn').textContent = '⚙️ Idő/Táj ▸';
+}
+if (isMobileViewport()) {
+  if (el('main-btn-row')) el('main-btn-row').hidden = true;
+  if (el('search')) el('search').hidden = true;
+  if (el('player-stats-bar')) el('player-stats-bar').hidden = false;
+  if (el('pills-toggle-btn')) el('pills-toggle-btn').textContent = '☰ Menü ▸';
 }
 if (window.innerWidth <= 768 && el('cam-widget-body') && el('cam-collapse-btn')) {
   el('cam-widget-body').hidden = true;
@@ -4699,11 +4717,46 @@ el('btn-behind').addEventListener('click', () => {
   if (selectedRes) setBehind(!behindMode);
 });
 
+const MAX_JOY_RADIUS = 62;
+const JOY_DEADZONE = 6;
+const SPRINT_THRESHOLD = 0.78;
+const MAX_WALK_SPEED = 8.0;
+const MAX_SPRINT_SPEED = 14.0;
+
 let walker = null;
 const pressedKeys = new Set();
 const playerMesh = createVillagerGroup({ name: 'Te', cloth: '#ffcf55' });
 playerMesh.visible = false;
 let dragLook = null;
+const joyState = {
+  pointerId: null,
+  originX: 0,
+  originY: 0,
+  dx: 0,
+  dy: 0,
+  normDist: 0,
+  isSprinting: false,
+};
+
+function resetJoystick() {
+  joyState.pointerId = null;
+  joyState.originX = 0;
+  joyState.originY = 0;
+  joyState.dx = 0;
+  joyState.dy = 0;
+  joyState.normDist = 0;
+  joyState.isSprinting = false;
+  const base = el('cod-joystick-base');
+  const knob = el('cod-joystick-knob');
+  if (base) {
+    base.classList.remove('active', 'sprinting');
+    base.style.left = '';
+    base.style.top = '';
+  }
+  if (knob) {
+    knob.style.transform = '';
+  }
+}
 
 function setWalker(on) {
   if (Boolean(walker) === on) return;
@@ -4727,20 +4780,32 @@ function setWalker(on) {
     }
 
     const startY = getGroundHeight(spawnX, spawnZ);
-    walker = { x: spawnX, z: spawnZ, y: startY, heading: spawnHeading, step: 0 };
+    walker = {
+      x: spawnX,
+      z: spawnZ,
+      y: startY,
+      heading: spawnHeading,
+      camYaw: spawnHeading,
+      camPitch: 0.14,
+      step: 0,
+    };
     playerMesh.visible = true;
     controls.enabled = false;
+    document.body.classList.add('walk-mode');
     el('walk-hud').hidden = false;
     el('vote').hidden = true;
     if (isMobileViewport()) {
       if (el('cam-widget')) el('cam-widget').hidden = true;
       if (el('zen-toggle-btn')) el('zen-toggle-btn').hidden = true;
     }
+    dragLook = null;
+    resetJoystick();
   } else {
     setView(walker.x, walker.z, 42);
     walker = null;
     playerMesh.visible = false;
     controls.enabled = true;
+    document.body.classList.remove('walk-mode');
     el('walk-hud').hidden = true;
     if (!inRoomMode) {
       if (el('vote')) el('vote').hidden = false;
@@ -4748,6 +4813,8 @@ function setWalker(on) {
       if (el('zen-toggle-btn')) el('zen-toggle-btn').hidden = false;
     }
     pressedKeys.clear();
+    dragLook = null;
+    resetJoystick();
   }
   syncResponsiveUIState();
 }
@@ -4863,23 +4930,39 @@ for (const id of ['card', 'walk-hud', ...DRAWER_IDS]) {
 window.addEventListener('resize', syncResponsiveUIState);
 syncResponsiveUIState();
 
-// Mobil érintőpad (D-Pad) gombok bekötése a sétához
-document.querySelectorAll('.dpad-btn').forEach((btn) => {
-  const code = btn.dataset.key;
-  const press = (e) => {
+// CoD Mobile stílusú virtuális analóg joystick (#cod-joystick-zone) + Multi-touch kameraforgatás
+const joyZone = el('cod-joystick-zone');
+const joyBase = el('cod-joystick-base');
+const joyKnob = el('cod-joystick-knob');
+
+if (joyZone) {
+  joyZone.addEventListener('pointerdown', (e) => {
+    if (!walker || joyState.pointerId !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
-    pressedKeys.add(code);
-    btn.classList.add('pressed');
-  };
-  const release = () => {
-    pressedKeys.delete(code);
-    btn.classList.remove('pressed');
-  };
-  btn.addEventListener('pointerdown', press);
-  btn.addEventListener('pointerup', release);
-  btn.addEventListener('pointerleave', release);
-  btn.addEventListener('pointercancel', release);
-});
+    try {
+      joyZone.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Szintetikus vagy nem támogatott események esetén figyelmen kívül hagyható
+    }
+    joyState.pointerId = e.pointerId;
+    joyState.originX = e.clientX;
+    joyState.originY = e.clientY;
+    joyState.dx = 0;
+    joyState.dy = 0;
+    joyState.normDist = 0;
+    joyState.isSprinting = false;
+    if (joyBase) {
+      joyBase.style.left = `${joyState.originX}px`;
+      joyBase.style.top = `${joyState.originY}px`;
+      joyBase.classList.add('active');
+      joyBase.classList.remove('sprinting');
+    }
+    if (joyKnob) {
+      joyKnob.style.transform = 'translate3d(0px, 0px, 0)';
+    }
+  });
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -4902,16 +4985,68 @@ window.addEventListener('keydown', (e) => {
   if (walker) pressedKeys.add(e.code);
 });
 window.addEventListener('keyup', (e) => pressedKeys.delete(e.code));
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (walker) dragLook = { x: e.clientX, id: e.pointerId };
+
+window.addEventListener('pointerdown', (e) => {
+  if (!walker || inRoomMode) return;
+  if (e.pointerId === joyState.pointerId || dragLook) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const targetEl = e.target instanceof Element ? e.target : null;
+  if (targetEl?.closest('#walk-exit, #walk-desktop-hint, #cod-joystick-zone, #top, .drawer, #card, #cam-widget, #vote, #zen-toggle-btn')) {
+    return;
+  }
+  dragLook = { x: e.clientX, y: e.clientY, id: e.pointerId };
 });
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (walker && dragLook?.id === e.pointerId) {
-    walker.heading -= (e.clientX - dragLook.x) * 0.007;
+
+window.addEventListener('pointermove', (e) => {
+  if (!walker) return;
+  if (e.pointerId === joyState.pointerId) {
+    const rawDx = e.clientX - joyState.originX;
+    const rawDy = e.clientY - joyState.originY;
+    const dist = Math.hypot(rawDx, rawDy);
+    const clampedDist = Math.min(dist, MAX_JOY_RADIUS);
+    const knobX = dist > 0 ? (rawDx / dist) * clampedDist : 0;
+    const knobY = dist > 0 ? (rawDy / dist) * clampedDist : 0;
+
+    joyState.dx = knobX;
+    joyState.dy = knobY;
+    joyState.normDist = dist <= JOY_DEADZONE
+      ? 0
+      : Math.min(1, (dist - JOY_DEADZONE) / (MAX_JOY_RADIUS - JOY_DEADZONE));
+    joyState.isSprinting = joyState.normDist >= SPRINT_THRESHOLD;
+
+    if (joyKnob) {
+      joyKnob.style.transform = `translate3d(${knobX}px, ${knobY}px, 0)`;
+    }
+    if (joyBase) {
+      joyBase.classList.toggle('sprinting', joyState.isSprinting);
+    }
+  } else if (dragLook && e.pointerId === dragLook.id) {
+    walker.camYaw -= (e.clientX - dragLook.x) * 0.0065;
+    walker.camPitch = THREE.MathUtils.clamp(
+      (walker.camPitch ?? 0.14) + (e.clientY - dragLook.y) * 0.0045,
+      -0.30,
+      0.55
+    );
     dragLook.x = e.clientX;
+    dragLook.y = e.clientY;
   }
 });
-window.addEventListener('pointerup', () => { dragLook = null; });
+
+function handleWalkPointerEnd(e) {
+  if (e.pointerId === joyState.pointerId) {
+    resetJoystick();
+  }
+  if (dragLook && e.pointerId === dragLook.id) {
+    dragLook = null;
+  }
+}
+window.addEventListener('pointerup', handleWalkPointerEnd);
+window.addEventListener('pointercancel', handleWalkPointerEnd);
+window.addEventListener('blur', () => {
+  pressedKeys.clear();
+  dragLook = null;
+  resetJoystick();
+});
 
 // --- 12.5 Ütközéskezelés (Collision Detection) és Automatikus Lépcsőzés (Auto-Stepping) ---
 function getGroundHeight(x, z) {
@@ -5022,22 +5157,66 @@ function resolveWalkerMovement(cx, cz, nx, nz, radius = 0.45) {
   return { x: cx, z: cz };
 }
 
+function lerpAngle(current, target, alpha) {
+  const twoPi = Math.PI * 2;
+  const diff = ((((target - current) % twoPi) + twoPi + Math.PI) % twoPi) - Math.PI;
+  return current + diff * alpha;
+}
+
+const walkCamTarget = new THREE.Vector3();
+
 function updateWalker(dt) {
   const has = (...codes) => codes.some((c) => pressedKeys.has(c));
-  const forward = (has('KeyW', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0);
-  const turn = (has('KeyA', 'ArrowLeft') ? 1 : 0) - (has('KeyD', 'ArrowRight') ? 1 : 0);
-  walker.heading += turn * 2.3 * dt;
+  const joyActive = joyState.pointerId !== null && joyState.normDist > 0;
+  let isMoving = false;
+  let moveSpeed = 0;
 
-  const speed = (has('ShiftLeft', 'ShiftRight') ? 14 : 7.5) * forward * dt;
-  if (forward !== 0) {
-    const rawNx = walker.x + Math.sin(walker.heading) * speed;
-    const rawNz = walker.z + Math.cos(walker.heading) * speed;
+  if (joyActive) {
+    const normDist = joyState.normDist;
+    if (normDist < SPRINT_THRESHOLD) {
+      moveSpeed = (normDist / SPRINT_THRESHOLD) * MAX_WALK_SPEED;
+    } else {
+      moveSpeed = MAX_WALK_SPEED + ((normDist - SPRINT_THRESHOLD) / (1 - SPRINT_THRESHOLD)) * (MAX_SPRINT_SPEED - MAX_WALK_SPEED);
+    }
+    moveSpeed = Math.min(MAX_SPRINT_SPEED, moveSpeed);
 
-    // Ütközésvizsgálat a házakkal és tereptárgyakkal + falmenti csúszás:
-    const resolved = resolveWalkerMovement(walker.x, walker.z, rawNx, rawNz, 0.45);
-    walker.x = resolved.x;
-    walker.z = resolved.z;
-    walker.step += dt * 10;
+    if (!dragLook) {
+      const nx = Math.max(-1, Math.min(1, joyState.dx / MAX_JOY_RADIUS));
+      walker.camYaw -= nx * 1.75 * dt;
+    }
+
+    const stickAngle = Math.atan2(-joyState.dx, -joyState.dy);
+    const moveAngle = walker.camYaw + stickAngle;
+    walker.heading = lerpAngle(walker.heading, moveAngle, Math.min(1, dt * 14));
+
+    if (moveSpeed > 0.01) {
+      const rawNx = walker.x + Math.sin(moveAngle) * moveSpeed * dt;
+      const rawNz = walker.z + Math.cos(moveAngle) * moveSpeed * dt;
+      const resolved = resolveWalkerMovement(walker.x, walker.z, rawNx, rawNz, 0.45);
+      walker.x = resolved.x;
+      walker.z = resolved.z;
+      walker.step += dt * (moveSpeed * 1.35);
+      isMoving = true;
+    }
+  } else {
+    const forward = (has('KeyW', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0);
+    const turn = (has('KeyA', 'ArrowLeft') ? 1 : 0) - (has('KeyD', 'ArrowRight') ? 1 : 0);
+    walker.camYaw = (walker.camYaw ?? walker.heading) + turn * 2.3 * dt;
+    walker.heading = walker.camYaw;
+
+    if (forward !== 0) {
+      moveSpeed = has('ShiftLeft', 'ShiftRight') ? MAX_SPRINT_SPEED : 7.5;
+      const stepDist = moveSpeed * forward * dt;
+      const rawNx = walker.x + Math.sin(walker.heading) * stepDist;
+      const rawNz = walker.z + Math.cos(walker.heading) * stepDist;
+
+      // Ütközésvizsgálat a házakkal és tereptárgyakkal + falmenti csúszás:
+      const resolved = resolveWalkerMovement(walker.x, walker.z, rawNx, rawNz, 0.45);
+      walker.x = resolved.x;
+      walker.z = resolved.z;
+      walker.step += dt * (moveSpeed * 1.35);
+      isMoving = true;
+    }
   }
 
   // Auto-unjam biztonsági védelem: ha a karakter valamiért mégis házfalba kerülne, kivezetjük a járdára
@@ -5061,14 +5240,23 @@ function updateWalker(dt) {
   const targetY = getGroundHeight(walker.x, walker.z);
   walker.y = THREE.MathUtils.lerp(walker.y !== undefined ? walker.y : targetY, targetY, Math.min(1, dt * 14));
 
-  const bob = forward !== 0 ? Math.abs(Math.sin(walker.step)) * 0.14 : 0;
+  const bob = isMoving ? Math.abs(Math.sin(walker.step)) * 0.14 : 0;
   playerMesh.position.set(walker.x, walker.y + bob, walker.z);
   playerMesh.rotation.y = walker.heading;
 
-  const camX = walker.x - Math.sin(walker.heading) * 6.5;
-  const camZ = walker.z - Math.cos(walker.heading) * 6.5;
-  camera.position.lerp(new THREE.Vector3(camX, walker.y + 3.3, camZ), Math.min(1, dt * 8));
-  camera.lookAt(walker.x + Math.sin(walker.heading) * 4, walker.y + 1.2, walker.z + Math.cos(walker.heading) * 4);
+  const pitch = walker.camPitch ?? 0.14;
+  const camDist = 6.5;
+  const horizDist = camDist * Math.cos(pitch);
+  const camX = walker.x - Math.sin(walker.camYaw) * horizDist;
+  const camZ = walker.z - Math.cos(walker.camYaw) * horizDist;
+  const camY = walker.y + 2.4 + camDist * Math.sin(pitch);
+  walkCamTarget.set(camX, camY, camZ);
+  camera.position.lerp(walkCamTarget, Math.min(1, dt * 8));
+  camera.lookAt(
+    walker.x + Math.sin(walker.camYaw) * 4,
+    walker.y + 1.25 - pitch * 1.5,
+    walker.z + Math.cos(walker.camYaw) * 4
+  );
   controls.target.set(walker.x, walker.y, walker.z);
 }
 
@@ -5627,12 +5815,30 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
+let wasMobileViewport = isMobileViewport();
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   roomCamera.aspect = window.innerWidth / window.innerHeight;
   roomCamera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const nowMobile = isMobileViewport();
+  if (!nowMobile) {
+    if (el('search')) el('search').hidden = false;
+    if (wasMobileViewport) {
+      if (el('main-btn-row')) el('main-btn-row').hidden = false;
+      if (el('player-stats-bar')) el('player-stats-bar').hidden = false;
+      if (el('pills-toggle-btn')) el('pills-toggle-btn').textContent = '☰ Menü ▾';
+    }
+  } else if (!wasMobileViewport) {
+    if (el('main-btn-row')) el('main-btn-row').hidden = true;
+    if (el('search')) el('search').hidden = true;
+    if (el('player-stats-bar')) el('player-stats-bar').hidden = false;
+    if (el('pills-toggle-btn')) el('pills-toggle-btn').textContent = '☰ Menü ▸';
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  }
+  wasMobileViewport = nowMobile;
 });
 
 updateDaylight(currentSec(), 0);

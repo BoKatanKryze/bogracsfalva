@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Bográcsfalva – Közösségi 3D Falu</title>
   <style>html, body { margin: 0; padding: 0; background: #8fb24a; overflow: hidden; }</style>
-  <link rel="stylesheet" href="./styles.css?v=20261115-1">
+  <link rel="stylesheet" href="./styles.css?v=20261115-2">
   <script type="importmap">
   {
     "imports": {
@@ -320,21 +320,16 @@
     <div id="chronicle-list"></div>
   </aside>
 
-  <!-- 4. Sétáló mód HUD (Asztali WASD + Mobil érintőpad vezérlés) -->
+  <!-- 4. Sétáló mód HUD (Mobil CoD-stílusú dinamikus Joystick + Asztali WASD vezérlés) -->
   <div id="walk-hud" hidden>
-    <p style="margin-bottom: 4px;"><b>🚶 Séta mód:</b> W/A/S/D vagy érintőgombok · Húzd a képernyőt a körbenézéshez!</p>
-    <div id="walk-touch-controls">
-      <div class="dpad-row">
-        <button class="dpad-btn" data-key="KeyW" type="button">⬆️</button>
-        <button class="dpad-btn" data-key="ShiftLeft" type="button" title="Sprint / Futás">🏃</button>
-      </div>
-      <div class="dpad-row">
-        <button class="dpad-btn" data-key="KeyA" type="button">⬅️</button>
-        <button class="dpad-btn" data-key="KeyS" type="button">⬇️</button>
-        <button class="dpad-btn" data-key="KeyD" type="button">➡️</button>
+    <button id="walk-exit" type="button">⬅️ Vissza</button>
+    <p id="walk-desktop-hint" style="margin-bottom: 4px;"><b>🚶 Séta mód:</b> W/A/S/D + Shift (Sprint) · Húzd az egeret a körbenézéshez!</p>
+    <div id="cod-joystick-zone" aria-label="Virtuális irányító joystick">
+      <div id="cod-joystick-base">
+        <span id="cod-sprint-badge">🏃 SPRINT</span>
+        <div id="cod-joystick-knob"></div>
       </div>
     </div>
-    <button id="walk-exit" type="button">Vissza a felülnézeti térképre</button>
   </div>
 
   <!-- 5. Szobabelső (Interior) Nézet és Berendező HUD -->
@@ -450,6 +445,6 @@
     </button>
   </nav>
 
-  <script type="module" src="./app.js?v=20261115-1"></script>
+  <script type="module" src="./app.js?v=20261115-2"></script>
 </body>
 </html>

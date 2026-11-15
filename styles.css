@@ -1181,35 +1181,6 @@ body.zen-mode #cam-widget {
   border-radius: 5px;
 }
 
-/* Mobil érintőgombok Sétáló (WASD) módhoz */
-#walk-touch-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 10px;
-}
-.dpad-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
-.dpad-btn {
-  width: 52px;
-  height: 44px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(255,248,234,.22);
-  color: #fff;
-  font: 700 16px Georgia, serif;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.dpad-btn:active, .dpad-btn.pressed {
-  background: var(--gold);
-  color: var(--ink);
-}
-
 /* Fókuszgyűrűk billentyűzetes navigációhoz */
 button:focus-visible,
 input:focus-visible,
@@ -1461,6 +1432,9 @@ select:focus-visible {
   #zen-toggle-btn:hover {
     transform: translateX(-50%) translateY(-1px);
   }
+  #cod-joystick-zone {
+    display: none !important;
+  }
   #walk-hud {
     left: 16px;
     right: auto;
@@ -1469,6 +1443,15 @@ select:focus-visible {
     -webkit-backdrop-filter: blur(12px);
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.26);
     z-index: 22;
+  }
+  #walk-hud:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #walk-desktop-hint {
+    order: -1;
+    margin: 0 !important;
   }
 }
 
@@ -1734,10 +1717,6 @@ select:focus-visible {
     font-size: 12px;
     flex: none;
   }
-  .dpad-btn {
-    width: 54px;
-    height: 46px;
-  }
   .drawer input,
   .drawer select,
   .room-subpanel input,
@@ -1745,52 +1724,162 @@ select:focus-visible {
     min-height: 42px;
   }
 
-  /* Lebegő widgetek az alsó navigáció felett */
-  #vote {
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-    left: 8px;
-    max-width: calc(52vw - 12px);
-    padding: 6px 9px;
-    font-size: 11.5px;
-    z-index: 12;
+  /* Letisztult mobil térképnézet: lebegő widgetek és asztali séta-súgó elrejtve */
+  #vote,
+  #cam-widget,
+  #zen-toggle-btn,
+  #walk-desktop-hint {
+    display: none !important;
   }
-  #cam-widget {
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-    right: 8px;
-    max-width: calc(48vw - 12px);
-    padding: 3px 6px;
-    font-size: 11px;
-    z-index: 12;
+
+  /* Mobil Séta mód (CoD Mobile minimalizmus: csak a Vissza gomb és a Joystick látszik) */
+  body.walk-mode #top,
+  body.walk-mode #mobile-bottom-nav,
+  body.walk-mode #vote,
+  body.walk-mode #cam-widget,
+  body.walk-mode #zen-toggle-btn,
+  body.walk-mode #home-compass-pointer,
+  body.walk-mode #labels,
+  body.walk-mode #card,
+  body.walk-mode .drawer,
+  body.walk-mode #drawer-backdrop,
+  body.walk-mode #drawer-backdrop.open {
+    display: none !important;
   }
-  #cam-collapse-btn {
-    padding: 2px 6px;
-    font-size: 10.5px;
-  }
-  #cam-widget .cam-row {
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  #cam-hint { display: none; }
+
   #walk-hud {
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: calc(100vw - 16px);
-    max-width: 380px;
-    z-index: 25;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    pointer-events: none;
+    z-index: 55;
   }
-  #zen-toggle-btn {
-    top: 50%;
-    right: 8px;
+
+  #walk-exit {
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    width: auto;
+    height: auto;
+    margin: 0;
+    min-height: 42px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(255, 248, 234, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--ink);
+    border: 1px solid rgba(120, 90, 50, 0.25);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
+    font: 800 13.5px/1 system-ui, sans-serif;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    pointer-events: auto;
+    touch-action: manipulation;
+    z-index: 60;
+  }
+  #walk-exit:active {
+    transform: scale(0.97);
+  }
+
+  /* CoD Mobile stílusú dinamikus analóg Joystick */
+  #cod-joystick-zone {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 52vw;
+    height: 55vh;
+    touch-action: none;
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    z-index: 58;
+  }
+
+  #cod-joystick-base {
+    position: fixed;
+    left: 26px;
+    bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+    width: 124px;
+    height: 124px;
+    border-radius: 50%;
+    background: rgba(20, 26, 20, 0.24);
+    border: 2px solid rgba(255, 252, 245, 0.42);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22), inset 0 0 18px rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+    opacity: 0.72;
+  }
+
+  #cod-joystick-base.active {
+    opacity: 1;
     bottom: auto;
-    left: auto;
-    transform: translateY(-50%);
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 12px;
-    z-index: 22;
+    transform: translate(-50%, -50%);
+    border-color: rgba(255, 252, 245, 0.78);
   }
+
+  #cod-joystick-base.sprinting,
+  #cod-joystick-base.active.sprinting {
+    border-color: #f59e0b;
+    box-shadow: 0 0 22px rgba(245, 158, 11, 0.55), inset 0 0 20px rgba(245, 158, 11, 0.25);
+  }
+
+  #cod-sprint-badge {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(245, 158, 11, 0.96);
+    color: #1f1408;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font: 800 10.5px/1.2 system-ui, sans-serif;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s, transform 0.12s;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  #cod-joystick-base.sprinting #cod-sprint-badge {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.05);
+  }
+
+  #cod-joystick-knob {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fffcf5, #e2d4b7);
+    border: 2px solid rgba(180, 125, 10, 0.55);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  #cod-joystick-base.sprinting #cod-joystick-knob {
+    background: radial-gradient(circle at 35% 35%, #fef3c7, #f59e0b);
+    border-color: #fbbf24;
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.72), 0 6px 16px rgba(0, 0, 0, 0.35);
+  }
+
   #room-hud {
     padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
     z-index: 50;
