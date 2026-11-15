@@ -698,7 +698,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261110-8';
+const APP_VERSION = '20261115-1';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 cachedVillageData = villageData;
@@ -2636,6 +2636,66 @@ function renderRoomEditorUI() {
   }));
 }
 
+const DRAWER_IDS = ['activities-drawer', 'claim-drawer', 'add-drawer', 'chronicle-drawer', 'supabase-modal'];
+let canSyncResponsiveUI = false;
+
+function isMobileViewport() {
+  return window.innerWidth <= 768;
+}
+
+function closeAllDrawers(exceptId = null) {
+  for (const id of DRAWER_IDS) {
+    if (id === exceptId) continue;
+    const node = el(id);
+    if (node) node.hidden = true;
+  }
+}
+
+function prepareDrawerOpen(drawerId) {
+  closeAllDrawers(drawerId);
+  if (isMobileViewport()) {
+    if (canSyncResponsiveUI && walker) setWalker(false);
+    if (el('card') && !el('card').hidden) closeCard();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  }
+}
+
+function syncResponsiveUIState() {
+  if (!canSyncResponsiveUI) return;
+  const isMobile = isMobileViewport();
+  const anyDrawerOpen = DRAWER_IDS.some((id) => Boolean(el(id) && !el(id).hidden));
+  const cardOpen = Boolean(el('card') && !el('card').hidden);
+
+  if (isMobile && anyDrawerOpen && cardOpen) {
+    closeCard();
+    return;
+  }
+
+  const showBackdrop = isMobile && (anyDrawerOpen || cardOpen);
+  const backdrop = el('drawer-backdrop');
+  if (backdrop) {
+    backdrop.hidden = !showBackdrop;
+    backdrop.classList.toggle('open', showBackdrop);
+  }
+
+  const isWalkActive = Boolean(walker);
+  const isActivitiesOpen = Boolean(el('activities-drawer') && !el('activities-drawer').hidden);
+  const isLeaderboardActive = isActivitiesOpen && activeMenuTab === 'leaderboard';
+  const isMenuActive = isActivitiesOpen && activeMenuTab !== 'leaderboard';
+  const isHomeActive = Boolean(
+    (el('claim-drawer') && !el('claim-drawer').hidden) ||
+    (el('add-drawer') && !el('add-drawer').hidden) ||
+    (cardOpen && currentConnectedUser && selectedRes?.name?.toLowerCase() === currentConnectedUser.toLowerCase())
+  );
+  const isMapActive = !isWalkActive && !isLeaderboardActive && !isMenuActive && !isHomeActive;
+
+  el('mob-nav-walk')?.classList.toggle('active', isWalkActive);
+  el('mob-nav-leaderboard')?.classList.toggle('active', isLeaderboardActive);
+  el('mob-nav-menu')?.classList.toggle('active', isMenuActive);
+  el('mob-nav-home')?.classList.toggle('active', isHomeActive);
+  el('mob-nav-map')?.classList.toggle('active', isMapActive);
+}
+
 async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
   const lower = houseOwnerName.toLowerCase();
   const savedKeys = getSavedInviteKeys();
@@ -2664,8 +2724,10 @@ async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
   el('home-compass-pointer').hidden = true;
   el('card').hidden = true;
   el('labels').hidden = true;
-  el('claim-drawer').hidden = true;
-  el('activities-drawer').hidden = true;
+  closeAllDrawers();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  if (el('mobile-bottom-nav')) el('mobile-bottom-nav').hidden = true;
+  document.body.classList.add('room-mode');
   el('room-hud').hidden = false;
   el('room-title').textContent = `🏠 @${data.owner} szobája`;
 
@@ -2677,6 +2739,7 @@ async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
 
   rebuildRoom3D();
   renderRoomEditorUI();
+  syncResponsiveUIState();
 }
 
 function exitRoomInterior() {
@@ -2687,11 +2750,14 @@ function exitRoomInterior() {
   controls.enabled = true;
 
   el('room-hud').hidden = true;
+  document.body.classList.remove('room-mode');
+  if (el('mobile-bottom-nav')) el('mobile-bottom-nav').hidden = false;
   el('zen-toggle-btn').hidden = false;
   el('top').hidden = false;
   el('vote').hidden = false;
   el('cam-widget').hidden = false;
   el('labels').hidden = false;
+  syncResponsiveUIState();
 }
 
 el('room-exit-btn').addEventListener('click', exitRoomInterior);
@@ -2901,9 +2967,7 @@ function populateQuickSelect() {
 }
 
 function openClaimDrawer(prefillName = '') {
-  el('add-drawer').hidden = true;
-  el('chronicle-drawer').hidden = true;
-  el('activities-drawer').hidden = true;
+  prepareDrawerOpen('claim-drawer');
   el('claim-drawer').hidden = false;
   el('claim-msg').hidden = true;
   populateQuickSelect();
@@ -2919,13 +2983,20 @@ function openClaimDrawer(prefillName = '') {
     el('claim-step-3').hidden = true;
     if (prefillName) el('claim-username').value = prefillName;
   }
+  syncResponsiveUIState();
 }
 
 el('claim-open').addEventListener('click', () => {
   if (el('claim-drawer').hidden) openClaimDrawer();
-  else el('claim-drawer').hidden = true;
+  else {
+    el('claim-drawer').hidden = true;
+    syncResponsiveUIState();
+  }
 });
-el('claim-close').addEventListener('click', () => { el('claim-drawer').hidden = true; });
+el('claim-close').addEventListener('click', () => {
+  el('claim-drawer').hidden = true;
+  syncResponsiveUIState();
+});
 
 el('claim-quick-btn').addEventListener('click', async () => {
   const chosen = el('claim-quick-select').value;
@@ -2936,10 +3007,7 @@ el('claim-quick-btn').addEventListener('click', async () => {
 
 if (el('claim-to-add-btn')) {
   el('claim-to-add-btn').addEventListener('click', () => {
-    el('claim-drawer').hidden = true;
-    updatePlotCapacityUI();
-    el('add-drawer').hidden = false;
-    el('new-name')?.focus();
+    openAddDrawer();
   });
 }
 
@@ -3663,15 +3731,18 @@ function queueCloudLeaderboardPush() {
 function openSupabaseModal() {
   const modal = el('supabase-modal');
   if (!modal) return;
+  prepareDrawerOpen('supabase-modal');
   const cfg = getActiveSupabaseConfig();
   el('sb-input-url').value = cfg.url || '';
   el('sb-input-key').value = cfg.anonKey || '';
   updateSupabaseModalStatus();
   modal.hidden = false;
+  syncResponsiveUIState();
 }
 
 el('supabase-modal-close')?.addEventListener('click', () => {
   el('supabase-modal').hidden = true;
+  syncResponsiveUIState();
 });
 
 el('sb-save-btn')?.addEventListener('click', async () => {
@@ -3690,6 +3761,7 @@ el('sb-save-btn')?.addEventListener('click', async () => {
       showMenuToast('🎉 Sikeresen csatlakozva a Supabase Realtime-hoz!');
       el('supabase-modal').hidden = true;
       if (!el('activities-drawer').hidden) renderActivitiesContent();
+      syncResponsiveUIState();
     }
   }, 800);
 });
@@ -4321,9 +4393,7 @@ setInterval(() => {
 }, 1000);
 
 function openActivitiesDrawer(tab = 'work') {
-  el('add-drawer').hidden = true;
-  el('chronicle-drawer').hidden = true;
-  el('claim-drawer').hidden = true;
+  prepareDrawerOpen('activities-drawer');
   el('activities-drawer').hidden = false;
   el('menu-toast').hidden = true;
   activeMenuTab = tab;
@@ -4331,19 +4401,29 @@ function openActivitiesDrawer(tab = 'work') {
     b.classList.toggle('active', b.dataset.acttab === tab);
   });
   renderActivitiesContent();
+  syncResponsiveUIState();
 }
 
 el('activities-open').addEventListener('click', () => {
   if (el('activities-drawer').hidden) openActivitiesDrawer('work');
-  else el('activities-drawer').hidden = true;
+  else {
+    el('activities-drawer').hidden = true;
+    syncResponsiveUIState();
+  }
 });
 el('activities-open-top').addEventListener('click', () => openActivitiesDrawer('work'));
 el('leaderboard-open-btn')?.addEventListener('click', () => {
   if (el('activities-drawer').hidden || activeMenuTab !== 'leaderboard') openActivitiesDrawer('leaderboard');
-  else el('activities-drawer').hidden = true;
+  else {
+    el('activities-drawer').hidden = true;
+    syncResponsiveUIState();
+  }
 });
 el('vote-open-menu-btn').addEventListener('click', () => openActivitiesDrawer('community'));
-el('activities-close').addEventListener('click', () => { el('activities-drawer').hidden = true; });
+el('activities-close').addEventListener('click', () => {
+  el('activities-drawer').hidden = true;
+  syncResponsiveUIState();
+});
 
 document.querySelectorAll('.act-tab').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -4351,11 +4431,16 @@ document.querySelectorAll('.act-tab').forEach((btn) => {
     el('menu-toast').hidden = true;
     document.querySelectorAll('.act-tab').forEach((b) => b.classList.toggle('active', b === btn));
     renderActivitiesContent();
+    syncResponsiveUIState();
   });
 });
 
 function selectResident(res, fly = true) {
   setWalker(false);
+  if (isMobileViewport()) {
+    closeAllDrawers();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  }
   selectedRes = res;
   selectedPlaceKey = null;
   followMode = true;
@@ -4392,11 +4477,16 @@ function selectResident(res, fly = true) {
   pin.visible = true;
   pin.position.set(tx, s.mode === 'home' ? 4.8 : 2.5, tz);
   if (fly) flyTo(tx, tz, 30);
+  syncResponsiveUIState();
 }
 
 function selectHouse(res) {
   setWalker(false);
   setBehind(false);
+  if (isMobileViewport()) {
+    closeAllDrawers();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  }
   selectedRes = res;
   selectedPlaceKey = null;
   followMode = false;
@@ -4430,11 +4520,16 @@ function selectHouse(res) {
   pin.visible = true;
   pin.position.set(res.x, 4.9, res.z);
   flyTo(res.x, res.z, 30);
+  syncResponsiveUIState();
 }
 
 function selectLandmark(placeKey) {
   setWalker(false);
   setBehind(false);
+  if (isMobileViewport()) {
+    closeAllDrawers();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  }
   selectedRes = null;
   selectedPlaceKey = placeKey;
   followMode = false;
@@ -4468,6 +4563,7 @@ function selectLandmark(placeKey) {
   pin.visible = true;
   pin.position.set(p.x, 5.2, p.z);
   flyTo(p.x, p.z, 36);
+  syncResponsiveUIState();
 }
 
 function refreshCardLive(sec) {
@@ -4505,8 +4601,9 @@ function closeCard() {
   selectedPlaceKey = null;
   followMode = false;
   pin.visible = false;
-  el('card').hidden = true;
-  el('vote').hidden = false;
+  if (el('card')) el('card').hidden = true;
+  if (!walker && !inRoomMode && el('vote')) el('vote').hidden = false;
+  syncResponsiveUIState();
 }
 
 el('card-close').addEventListener('click', closeCard);
@@ -4576,11 +4673,13 @@ el('room-editor-collapse').addEventListener('click', () => {
   el('room-editor-collapse').textContent = body.hidden ? '▸ Raktár megnyitása' : '▾ Raktár elrejtése';
 });
 
-// Mobil készülékeken alapból összecsukjuk a másodlagos paneleket (Idő/Táj csúszka és Kamera részletek),
-// hogy a 3D falu azonnal teljes pompájában látszódjon, de 1 érintéssel bármikor lenyithatók legyenek!
-if (window.innerWidth <= 768) {
+// Az Idő/Táj csúszka panel alapból összecsukva indul asztali és mobil nézetben is, hogy a felső sáv kompakt maradjon,
+// a Kamera részleteket pedig mobilon alapból összecsukjuk (1 érintéssel bármikor lenyithatók).
+if (el('time-box') && el('brand-toggle-btn')) {
   el('time-box').hidden = true;
   el('brand-toggle-btn').textContent = '⚙️ Idő/Táj ▸';
+}
+if (window.innerWidth <= 768 && el('cam-widget-body') && el('cam-collapse-btn')) {
   el('cam-widget-body').hidden = true;
   el('cam-collapse-btn').textContent = '▸ Mutat';
 }
@@ -4610,7 +4709,8 @@ function setWalker(on) {
   if (Boolean(walker) === on) return;
   if (on) {
     closeCard();
-    el('activities-drawer').hidden = true;
+    closeAllDrawers();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
     let spawnX = controls.target.x;
     let spawnZ = controls.target.z;
     let spawnHeading = Math.PI;
@@ -4632,19 +4732,136 @@ function setWalker(on) {
     controls.enabled = false;
     el('walk-hud').hidden = false;
     el('vote').hidden = true;
+    if (isMobileViewport()) {
+      if (el('cam-widget')) el('cam-widget').hidden = true;
+      if (el('zen-toggle-btn')) el('zen-toggle-btn').hidden = true;
+    }
   } else {
     setView(walker.x, walker.z, 42);
     walker = null;
     playerMesh.visible = false;
     controls.enabled = true;
     el('walk-hud').hidden = true;
-    el('vote').hidden = false;
+    if (!inRoomMode) {
+      if (el('vote')) el('vote').hidden = false;
+      if (el('cam-widget')) el('cam-widget').hidden = false;
+      if (el('zen-toggle-btn')) el('zen-toggle-btn').hidden = false;
+    }
     pressedKeys.clear();
   }
+  syncResponsiveUIState();
 }
 
 el('walk-open').addEventListener('click', () => setWalker(true));
 el('walk-exit').addEventListener('click', () => setWalker(false));
+
+// --- 12.1 Mobil Alsó Navigáció, Backdrop, Bottom Sheet Swipe-Down és Reszponzív Állapot-Szinkron ---
+canSyncResponsiveUI = true;
+
+el('mob-nav-map')?.addEventListener('click', () => {
+  if (inRoomMode) return;
+  if (walker) setWalker(false);
+  closeAllDrawers();
+  closeCard();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  if (!walker && !inRoomMode && el('vote')) el('vote').hidden = false;
+  syncResponsiveUIState();
+});
+
+el('mob-nav-menu')?.addEventListener('click', () => {
+  if (inRoomMode) return;
+  if (walker) setWalker(false);
+  closeCard();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  const actDrawer = el('activities-drawer');
+  if (!actDrawer || actDrawer.hidden || activeMenuTab === 'leaderboard') {
+    openActivitiesDrawer('work');
+  } else {
+    actDrawer.hidden = true;
+    syncResponsiveUIState();
+  }
+});
+
+el('mob-nav-leaderboard')?.addEventListener('click', () => {
+  if (inRoomMode) return;
+  if (walker) setWalker(false);
+  closeCard();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  const actDrawer = el('activities-drawer');
+  if (!actDrawer || actDrawer.hidden || activeMenuTab !== 'leaderboard') {
+    openActivitiesDrawer('leaderboard');
+  } else {
+    actDrawer.hidden = true;
+    syncResponsiveUIState();
+  }
+});
+
+el('mob-nav-home')?.addEventListener('click', () => {
+  if (inRoomMode) return;
+  if (walker) setWalker(false);
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  const claimDrawer = el('claim-drawer');
+  if (claimDrawer && !claimDrawer.hidden) {
+    claimDrawer.hidden = true;
+    syncResponsiveUIState();
+  } else {
+    closeAllDrawers('claim-drawer');
+    flyToMyOwnHouse();
+  }
+});
+
+el('mob-nav-walk')?.addEventListener('click', () => {
+  if (inRoomMode) return;
+  closeAllDrawers();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  setWalker(!walker);
+  syncResponsiveUIState();
+});
+
+el('drawer-backdrop')?.addEventListener('click', () => {
+  closeAllDrawers();
+  closeCard();
+  if (el('search-dropdown')) el('search-dropdown').hidden = true;
+  if (!walker && !inRoomMode && el('vote')) el('vote').hidden = false;
+  syncResponsiveUIState();
+});
+
+document.querySelectorAll('.sheet-handle').forEach((handle) => {
+  let startY = null;
+  handle.addEventListener('touchstart', (e) => {
+    startY = e.touches.length === 1 ? e.touches[0].clientY : null;
+  }, { passive: true });
+  handle.addEventListener('touchend', (e) => {
+    if (startY === null) return;
+    const endY = e.changedTouches[0]?.clientY;
+    const deltaY = typeof endY === 'number' ? endY - startY : 0;
+    startY = null;
+    if (deltaY > 60) {
+      const sheet = handle.closest('#card, .drawer');
+      if (!sheet) return;
+      if (sheet.id === 'card') closeCard();
+      else {
+        sheet.hidden = true;
+        syncResponsiveUIState();
+      }
+    }
+  }, { passive: true });
+  handle.addEventListener('touchcancel', () => {
+    startY = null;
+  }, { passive: true });
+});
+
+const uiStateObserver = new MutationObserver(() => {
+  syncResponsiveUIState();
+});
+for (const id of ['card', 'walk-hud', ...DRAWER_IDS]) {
+  const node = el(id);
+  if (node) {
+    uiStateObserver.observe(node, { attributes: true, attributeFilter: ['hidden'] });
+  }
+}
+window.addEventListener('resize', syncResponsiveUIState);
+syncResponsiveUIState();
 
 // Mobil érintőpad (D-Pad) gombok bekötése a sétához
 document.querySelectorAll('.dpad-btn').forEach((btn) => {
@@ -4665,18 +4882,18 @@ document.querySelectorAll('.dpad-btn').forEach((btn) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape') {
-    if (inRoomMode) exitRoomInterior();
+    const isFormField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA');
+    if (isFormField) e.target.blur?.();
+    if (inRoomMode && !isFormField) exitRoomInterior();
     else if (walker) setWalker(false);
-    else closeCard();
-    el('add-drawer').hidden = true;
-    el('chronicle-drawer').hidden = true;
-    el('claim-drawer').hidden = true;
-    el('activities-drawer').hidden = true;
-    el('search-dropdown').hidden = true;
+    else if (!inRoomMode) closeCard();
+    closeAllDrawers();
+    if (el('search-dropdown')) el('search-dropdown').hidden = true;
+    syncResponsiveUIState();
     return;
   }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
   if (!walker && !inRoomMode) {
     if (e.code === 'KeyQ') el('cam-rot-left').click();
     if (e.code === 'KeyE') el('cam-rot-right').click();
@@ -5015,15 +5232,25 @@ document.addEventListener('pointerdown', (e) => {
 });
 
 // Procedurális Telek Elfoglalása (GDPR-mentes: Becenév + Jelszó + maxHouses korlát)
-el('add-open').addEventListener('click', () => {
-  el('chronicle-drawer').hidden = true;
-  el('claim-drawer').hidden = true;
-  el('activities-drawer').hidden = true;
+function openAddDrawer() {
+  prepareDrawerOpen('add-drawer');
   updatePlotCapacityUI();
-  el('add-drawer').hidden = !el('add-drawer').hidden;
-  if (!el('add-drawer').hidden) el('new-name').focus();
+  el('add-drawer').hidden = false;
+  el('new-name')?.focus();
+  syncResponsiveUIState();
+}
+
+el('add-open').addEventListener('click', () => {
+  if (el('add-drawer').hidden) openAddDrawer();
+  else {
+    el('add-drawer').hidden = true;
+    syncResponsiveUIState();
+  }
 });
-el('add-close').addEventListener('click', () => { el('add-drawer').hidden = true; });
+el('add-close').addEventListener('click', () => {
+  el('add-drawer').hidden = true;
+  syncResponsiveUIState();
+});
 
 if (el('add-to-claim-btn')) {
   el('add-to-claim-btn').addEventListener('click', () => {
@@ -5108,12 +5335,23 @@ function renderChronicle() {
 }
 renderChronicle();
 
+function openChronicleDrawer() {
+  prepareDrawerOpen('chronicle-drawer');
+  el('chronicle-drawer').hidden = false;
+  syncResponsiveUIState();
+}
+
 el('chronicle-open').addEventListener('click', () => {
-  el('add-drawer').hidden = true;
-  el('claim-drawer').hidden = true;
-  el('chronicle-drawer').hidden = !el('chronicle-drawer').hidden;
+  if (el('chronicle-drawer').hidden) openChronicleDrawer();
+  else {
+    el('chronicle-drawer').hidden = true;
+    syncResponsiveUIState();
+  }
 });
-el('chronicle-close').addEventListener('click', () => { el('chronicle-drawer').hidden = true; });
+el('chronicle-close').addEventListener('click', () => {
+  el('chronicle-drawer').hidden = true;
+  syncResponsiveUIState();
+});
 
 // --- 14. Kattintás a Falu Térképen, Lebegő Címkék és Képernyőszéli "Saját házam" Iránytű ---
 const raycaster = new THREE.Raycaster();
