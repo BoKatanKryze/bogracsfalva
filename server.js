@@ -45,17 +45,158 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(Buffer.from(key, 'hex'), Buffer.from(derived, 'hex'));
 }
 
+function isPlainObject(val) {
+  return Boolean(val && typeof val === 'object' && !Array.isArray(val));
+}
+
+function toFiniteNumber(val) {
+  if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+  if (typeof val === 'string' && val.trim() !== '') {
+    const num = Number(val);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function pickFiniteNumber(incomingVal, existingVal, fallbackVal) {
+  const n1 = toFiniteNumber(incomingVal);
+  if (n1 !== null) return n1;
+  const n2 = toFiniteNumber(existingVal);
+  if (n2 !== null) return n2;
+  return fallbackVal;
+}
+
+function mergePlainObject(...objs) {
+  const out = {};
+  for (const obj of objs) {
+    if (!isPlainObject(obj)) continue;
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined) out[key] = val;
+    }
+  }
+  return out;
+}
+
+function mergeNumericDict(defaultsObj, prevObj, nextObj, { min = 0, max = Infinity, integer = false } = {}) {
+  const out = { ...defaultsObj };
+  for (const src of [prevObj, nextObj]) {
+    if (!isPlainObject(src)) continue;
+    for (const [key, val] of Object.entries(src)) {
+      const n = toFiniteNumber(val);
+      if (n === null) continue;
+      const clamped = Math.max(min, Math.min(max, n));
+      out[key] = integer ? Math.round(clamped) : clamped;
+    }
+  }
+  return out;
+}
+
+function cloneActiveTask(task) {
+  if (!isPlainObject(task)) return null;
+  return {
+    ...task,
+    ...(isPlainObject(task.rewardRes) ? { rewardRes: { ...task.rewardRes } } : {}),
+  };
+}
+
+/** Build a fresh default RPG profile with all scalable progression fields. */
 function createDefaultRpgProfile() {
   return {
     coins: 50,
     energy: 100,
+    maxEnergy: 100,
     xp: 0,
     resources: { fa: 0, liszt: 0, hal: 0, tej: 0 },
     cooldowns: {},
-    stats: { worksDone: 0, visitedFoter: false, boughtFurniture: false, votedOption: null },
+    activeTask: null,
+    toolLevels: { axe: 0, rod: 0, millstone: 0, scales: 0, boots: 0 },
+    jobMasteryHours: {},
+    wellRested: false,
+    comfortBonusCount: 0,
+    stats: {
+      worksDone: 0,
+      totalHoursWorked: 0,
+      toolsUpgraded: 0,
+      itemsCrafted: 0,
+      visitedFoter: false,
+      boughtFurniture: false,
+      votedOption: null,
+    },
     claimedQuests: {},
     votes: { pekseg: 48, ortorony: 39, konyvtar: 27 },
     lastEnergyUpdate: Date.now(),
+  };
+}
+
+/** Merge an existing RPG profile with incoming updates while clamping energy bounds and preserving nested maps. */
+function normalizeRpgProfile(existing = null, incoming = null) {
+  const defaults = createDefaultRpgProfile();
+  const prev = isPlainObject(existing) ? existing : {};
+  const next = isPlainObject(incoming) ? incoming : {};
+
+  const resources = mergeNumericDict(defaults.resources, prev.resources, next.resources, { min: 0, integer: true });
+  const cooldowns = mergePlainObject(defaults.cooldowns, prev.cooldowns, next.cooldowns);
+  const toolLevels = mergeNumericDict(defaults.toolLevels, prev.toolLevels, next.toolLevels, { min: 0, integer: true });
+  const jobMasteryHours = mergeNumericDict(defaults.jobMasteryHours, prev.jobMasteryHours, next.jobMasteryHours, { min: 0 });
+  const claimedQuests = mergePlainObject(defaults.claimedQuests, prev.claimedQuests, next.claimedQuests);
+  const votes = mergeNumericDict(defaults.votes, prev.votes, next.votes, { min: 0, integer: true });
+
+  const mergedStats = mergePlainObject(defaults.stats, prev.stats, next.stats);
+  const stats = {
+    ...mergedStats,
+    worksDone: Math.max(0, Math.round(toFiniteNumber(mergedStats.worksDone) ?? 0)),
+    totalHoursWorked: Math.max(0, toFiniteNumber(mergedStats.totalHoursWorked) ?? 0),
+    toolsUpgraded: Math.max(0, Math.round(toFiniteNumber(mergedStats.toolsUpgraded) ?? 0)),
+    itemsCrafted: Math.max(0, Math.round(toFiniteNumber(mergedStats.itemsCrafted) ?? 0)),
+    visitedFoter: Boolean(mergedStats.visitedFoter),
+    boughtFurniture: Boolean(mergedStats.boughtFurniture),
+    votedOption: mergedStats.votedOption == null ? null : String(mergedStats.votedOption),
+  };
+
+  let activeTask = cloneActiveTask(prev.activeTask);
+  if (Object.prototype.hasOwnProperty.call(next, 'activeTask')) {
+    if (next.activeTask === null) {
+      activeTask = null;
+    } else if (isPlainObject(next.activeTask)) {
+      activeTask = cloneActiveTask(next.activeTask);
+    }
+  }
+
+  const bootsLevel = Math.max(0, Math.floor(toFiniteNumber(toolLevels.boots) ?? 0));
+  const minFromBoots = Math.min(200, 100 + bootsLevel * 10);
+  const rawMaxEnergy = pickFiniteNumber(next.maxEnergy, prev.maxEnergy, defaults.maxEnergy);
+  const maxEnergy = Math.max(minFromBoots, Math.min(200, Math.round(rawMaxEnergy)));
+
+  const rawEnergy = pickFiniteNumber(next.energy, prev.energy, defaults.energy);
+  const energy = Math.max(0, Math.min(maxEnergy, Math.round(rawEnergy)));
+
+  const coins = Math.max(0, Math.round(pickFiniteNumber(next.coins, prev.coins, defaults.coins)));
+  const xp = Math.max(0, Math.round(pickFiniteNumber(next.xp, prev.xp, defaults.xp)));
+  const wellRested = typeof next.wellRested === 'boolean'
+    ? next.wellRested
+    : (typeof prev.wellRested === 'boolean' ? prev.wellRested : defaults.wellRested);
+  const comfortBonusCount = Math.max(0, Math.round(pickFiniteNumber(next.comfortBonusCount, prev.comfortBonusCount, defaults.comfortBonusCount)));
+  const lastEnergyUpdate = Math.max(0, Math.round(pickFiniteNumber(next.lastEnergyUpdate, prev.lastEnergyUpdate, defaults.lastEnergyUpdate)));
+
+  return {
+    ...defaults,
+    ...prev,
+    ...next,
+    coins,
+    energy,
+    maxEnergy,
+    xp,
+    resources,
+    cooldowns,
+    activeTask,
+    toolLevels,
+    jobMasteryHours,
+    wellRested,
+    comfortBonusCount,
+    stats,
+    claimedQuests,
+    votes,
+    lastEnergyUpdate,
   };
 }
 
@@ -235,7 +376,7 @@ const server = http.createServer(async (req, res) => {
     if (username) {
       const h = interiors.houses[username.toLowerCase()];
       if (h) {
-        if (!h.rpg) h.rpg = createDefaultRpgProfile();
+        h.rpg = normalizeRpgProfile(h.rpg);
         rpg = h.rpg;
       }
     }
@@ -289,7 +430,7 @@ const server = http.createServer(async (req, res) => {
       house.passwordHash = hashPassword(password);
     }
 
-    if (!house.rpg) house.rpg = createDefaultRpgProfile();
+    house.rpg = normalizeRpgProfile(house.rpg);
     if (rawToken) {
       interiors.sessions[hashToken(rawToken)] = resident.name;
     }
@@ -300,7 +441,13 @@ const server = http.createServer(async (req, res) => {
 
   // 1.6 Felhasználóhoz kötött RPG profil & Cooldown mentése
   if (url.pathname === '/api/rpg/sync' && req.method === 'POST') {
-    const body = await parseBody(req);
+    let rawBody;
+    try {
+      rawBody = await parseBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Érvénytelen JSON kérés.' });
+    }
+    const body = isPlainObject(rawBody) ? rawBody : {};
     const interiors = await readInteriors();
     const currentUser = getSessionUser(req, interiors) || String(body.username || '').trim();
     if (!currentUser) return sendJson(res, 403, { error: 'Nincs kiválasztott karakter.' });
@@ -309,12 +456,11 @@ const server = http.createServer(async (req, res) => {
     const house = interiors.houses[key];
     if (!house) return sendJson(res, 404, { error: 'Ház nem található.' });
 
-    if (body.rpg && typeof body.rpg === 'object') {
-      house.rpg = {
-        ...(house.rpg || createDefaultRpgProfile()),
-        ...body.rpg,
-      };
+    if (isPlainObject(body.rpg)) {
+      house.rpg = normalizeRpgProfile(house.rpg, body.rpg);
       await writeInteriors(interiors);
+    } else {
+      house.rpg = normalizeRpgProfile(house.rpg);
     }
     sendJson(res, 200, { ok: true, rpg: house.rpg });
     return;
@@ -366,8 +512,9 @@ const server = http.createServer(async (req, res) => {
     if (!interiors.houses[key]) {
       interiors.houses[key] = createStarterHouse(pending.username);
     }
+    interiors.houses[key].rpg = normalizeRpgProfile(interiors.houses[key].rpg);
     await writeInteriors(interiors);
-    sendJson(res, 200, { ok: true, username: pending.username });
+    sendJson(res, 200, { ok: true, username: pending.username, rpg: interiors.houses[key].rpg });
     return;
   }
 
@@ -447,6 +594,7 @@ const server = http.createServer(async (req, res) => {
         .slice(0, 20);
     }
     if (Array.isArray(body.items)) {
+      if (!Array.isArray(house.items)) house.items = [];
       const updatedMap = new Map(body.items.map((i) => [i.id, i]));
       let placedCount = 0;
       for (const item of house.items) {
@@ -462,6 +610,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    house.rpg = normalizeRpgProfile(house.rpg);
     await writeInteriors(interiors);
     sendJson(res, 200, { ok: true, house });
     return;
@@ -542,6 +691,7 @@ const server = http.createServer(async (req, res) => {
       giftFrom: null,
       unboxed: true,
     };
+    if (!Array.isArray(myHouse.items)) myHouse.items = [];
     myHouse.items.push(newItem);
     await writeInteriors(interiors);
     sendJson(res, 200, { ok: true, item: newItem, items: myHouse.items });
@@ -680,6 +830,18 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`🏡 Kisfalu szerver fut: http://localhost:${PORT}`);
-});
+const isDirectRun = (() => {
+  if (!process.argv[1]) return false;
+  const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const entry = norm(path.resolve(process.argv[1]));
+  const self = norm(path.resolve(fileURLToPath(import.meta.url)));
+  return entry === self || `${entry}.js` === self;
+})();
+
+if (isDirectRun) {
+  server.listen(PORT, () => {
+    console.log(`🏡 Kisfalu szerver fut: http://localhost:${PORT}`);
+  });
+}
+
+export { createDefaultRpgProfile, normalizeRpgProfile, server };

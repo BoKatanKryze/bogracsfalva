@@ -1010,12 +1010,70 @@ body.zen-mode #cam-widget {
   background: linear-gradient(90deg, #ffcf55, #52b788);
   transition: width .25s ease;
 }
+.xp-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+#stat-xp-text {
+  font-weight: 700;
+  font-size: 11px;
+  color: #f6e7c4;
+  white-space: nowrap;
+}
+.xp-track {
+  flex: 1;
+  min-width: 48px;
+  height: 7px;
+  background: rgba(255,255,255,.16);
+  border-radius: 6px;
+  overflow: hidden;
+}
+#stat-xp-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #a78bfa, #ffcf55);
+  border-radius: 6px;
+  transition: width .25s ease;
+}
 .res-chips-row {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   font-size: 11.5px;
   color: #e6d8be;
+}
+#hud-active-task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 207, 85, 0.16);
+  border: 1px solid rgba(255, 207, 85, 0.42);
+}
+#hud-active-task-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffe8a3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#hud-active-task-open {
+  flex: none;
+  background: var(--gold);
+  color: var(--ink);
+  white-space: nowrap;
+}
+#hud-active-task-open:hover {
+  background: var(--gold-hover);
 }
 
 /* Tevékenységek / Falusi Menü (Munka, Pihenés, Bolt, Küldetések) */
@@ -1110,6 +1168,30 @@ body.zen-mode #cam-widget {
   border: 1.5px solid #d99b26;
   font-size: 12.5px;
 }
+.work-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#work-progress-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.work-timer-badge {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  color: #7c2d12;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(217, 155, 38, 0.55);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 .work-bar-track {
   height: 10px;
   background: rgba(44,28,12,.15);
@@ -1121,7 +1203,223 @@ body.zen-mode #cam-widget {
   height: 100%;
   width: 0%;
   background: var(--green);
-  transition: width .1s linear;
+  transition: width .2s linear;
+}
+#work-progress-box .work-progress-reward,
+.work-progress-reward {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #5b3d12;
+  font-weight: 700;
+}
+.work-progress-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.work-ff-btn {
+  flex: 1 1 auto;
+  background: linear-gradient(135deg, #ffcf55 0%, #f59e0b 100%);
+  color: var(--ink);
+  border: 1px solid #d97706;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+}
+.work-ff-btn:hover {
+  background: linear-gradient(135deg, #ffe082 0%, #fbbf24 100%);
+}
+.work-cancel-btn {
+  flex: 0 1 auto;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid rgba(200, 52, 58, 0.35);
+  padding: 5px 9px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.work-cancel-btn:hover {
+  background: #fecaca;
+}
+
+/* Skálázható RPG kártyák (#activities-content) */
+.rpg-summary-banner {
+  background: linear-gradient(135deg, #fffdf7 0%, #f5ebd6 100%);
+  border: 1.5px solid #d6c198;
+  border-radius: 12px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rested-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f5132;
+  background: linear-gradient(135deg, #d1e7dd 0%, #fff3cd 100%);
+  border: 1px solid #52b788;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.section-heading {
+  margin: 6px 0 2px;
+  padding: 4px 2px 3px;
+  border-bottom: 1.5px solid rgba(44, 28, 12, 0.14);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.menu-item-card.column-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.menu-item-card.column-card .menu-item-info {
+  flex: 0 0 auto;
+  width: 100%;
+}
+.menu-item-card.column-card > .menu-act-btn {
+  width: 100%;
+  text-align: center;
+}
+.menu-item-card.locked {
+  background: #f5efe2;
+  border-color: #d6cbb5;
+  opacity: 0.8;
+}
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #842029;
+  background: #f8d7da;
+  border: 1px solid rgba(200, 52, 58, 0.25);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.mastery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #5b3d12;
+  background: #fef3c7;
+  border: 1px solid #e6c15c;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.duration-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dur-btn {
+  flex: 1 1 0;
+  min-width: 48px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 1.5px solid #d8c6a3;
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 11.5px Georgia, serif;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease;
+}
+.dur-btn:hover:not(:disabled) {
+  background: var(--paper-hover);
+  border-color: #b79c68;
+}
+.dur-btn.active {
+  background: var(--ink);
+  color: var(--gold);
+  border-color: var(--ink);
+  box-shadow: 0 2px 6px rgba(44, 28, 12, 0.22);
+}
+.dur-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.shift-preview {
+  background: #fbf5e8;
+  border: 1px solid #e4d4b4;
+  border-radius: 9px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+.upgrade-card {
+  border-color: #d8c296;
+  background: linear-gradient(180deg, #ffffff 0%, #fdf9f0 100%);
+}
+.level-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+.level-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e5dac3;
+  border: 1px solid #bfa97f;
+  display: inline-block;
+  transition: background .15s ease, transform .15s ease;
+}
+.level-dot.filled {
+  background: var(--gold);
+  border-color: #b47d0a;
+  box-shadow: 0 0 4px rgba(245, 158, 11, 0.45);
+}
+.craft-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.craft-actions .menu-act-btn {
+  flex: 1 1 120px;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
+  padding: 6px 9px;
+}
+.craft-actions .menu-act-btn.secondary {
+  background: #e3f0e2;
+  color: #1b4332;
+  border: 1px solid rgba(63, 115, 80, 0.35);
+}
+.craft-actions .menu-act-btn.secondary:hover:not(:disabled) {
+  background: #cfe6cd;
 }
 
 /* Leaderboard / Ranglista és Dobogó (Podium) */
@@ -1449,10 +1747,35 @@ select:focus-visible {
     max-width: 185px;
     gap: 5px;
   }
+  body:not(.is-mobile-ui) #player-stats-bar .xp-bar-wrap {
+    flex: 1 1 130px;
+    min-width: 130px;
+    max-width: 175px;
+    gap: 5px;
+  }
+  body:not(.is-mobile-ui) #player-stats-bar #stat-xp-text {
+    white-space: nowrap;
+    font-size: 10.5px;
+  }
+  body:not(.is-mobile-ui) #player-stats-bar .xp-track {
+    height: 6px;
+  }
   body:not(.is-mobile-ui) #player-stats-bar .res-chips-row {
     justify-content: center;
     font-size: 11px;
     gap: 4px;
+  }
+  body:not(.is-mobile-ui) #player-stats-bar #hud-active-task {
+    flex: 1 1 100%;
+    padding: 3px 8px;
+    gap: 8px;
+  }
+  body:not(.is-mobile-ui) #player-stats-bar #hud-active-task-text {
+    font-size: 11px;
+  }
+  body:not(.is-mobile-ui) #player-stats-bar #hud-active-task-open {
+    padding: 2px 7px;
+    font-size: 10.5px;
   }
   body:not(.is-mobile-ui) #main-btn-row {
     justify-content: center;
@@ -1683,9 +2006,32 @@ select:focus-visible {
     font-size: 11px;
     padding: 3px 6px;
   }
+  .xp-bar-wrap {
+    width: 100%;
+    gap: 5px;
+  }
+  #stat-xp-text {
+    font-size: 10.5px;
+  }
+  .xp-track {
+    height: 6px;
+  }
   .res-chips-row {
     font-size: 10.5px;
     gap: 4px;
+  }
+  #hud-active-task {
+    padding: 3px 7px;
+    gap: 6px;
+  }
+  #hud-active-task-text {
+    font-size: 10.5px;
+  }
+  #hud-active-task-open {
+    min-height: 28px;
+    min-width: auto;
+    padding: 3px 9px;
+    font-size: 11px;
   }
 
   #my-house-btn,
@@ -1854,6 +2200,11 @@ select:focus-visible {
   .cam-btn,
   .inv-btn {
     min-height: 42px;
+  }
+  .dur-btn {
+    min-height: 36px;
+    padding: 5px 8px;
+    font-size: 12px;
   }
   .pill-btn {
     padding: 0 11px;
@@ -2169,6 +2520,29 @@ select:focus-visible {
     font-size: 11.5px;
     background: rgba(44, 28, 12, 0.94);
   }
+  body.is-mobile-ui #player-stats-bar .xp-bar-wrap {
+    width: 100%;
+    gap: 5px;
+  }
+  body.is-mobile-ui #player-stats-bar #stat-xp-text {
+    font-size: 10.5px;
+  }
+  body.is-mobile-ui #player-stats-bar .xp-track {
+    height: 6px;
+  }
+  body.is-mobile-ui #player-stats-bar #hud-active-task {
+    padding: 3px 7px;
+    gap: 6px;
+  }
+  body.is-mobile-ui #player-stats-bar #hud-active-task-text {
+    font-size: 10.5px;
+  }
+  body.is-mobile-ui #player-stats-bar #hud-active-task-open {
+    min-height: 28px;
+    min-width: auto;
+    padding: 3px 9px;
+    font-size: 11px;
+  }
   body.is-mobile-ui #q,
   body.is-mobile-ui #search-toggle-btn {
     height: 40px;
@@ -2222,6 +2596,11 @@ select:focus-visible {
   body.is-mobile-ui .cam-btn,
   body.is-mobile-ui .inv-btn {
     min-height: 42px;
+  }
+  body.is-mobile-ui .dur-btn {
+    min-height: 36px;
+    padding: 5px 8px;
+    font-size: 12px;
   }
   body.is-mobile-ui .drawer input,
   body.is-mobile-ui .drawer select,

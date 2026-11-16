@@ -78,14 +78,54 @@ function createDefaultRpgProfileLocal() {
   return {
     coins: 50,
     energy: 100,
+    maxEnergy: 100,
     xp: 0,
     resources: { fa: 0, liszt: 0, hal: 0, tej: 0 },
     cooldowns: {},
-    stats: { worksDone: 0, visitedFoter: false, boughtFurniture: false, votedOption: null },
+    activeTask: null,
+    toolLevels: { axe: 0, rod: 0, millstone: 0, scales: 0, boots: 0 },
+    jobMasteryHours: {},
+    wellRested: false,
+    comfortBonusCount: 0,
+    stats: {
+      worksDone: 0,
+      totalHoursWorked: 0,
+      toolsUpgraded: 0,
+      itemsCrafted: 0,
+      visitedFoter: false,
+      boughtFurniture: false,
+      votedOption: null,
+    },
     claimedQuests: {},
     votes: { pekseg: 48, ortorony: 39, konyvtar: 27 },
     lastEnergyUpdate: Date.now(),
   };
+}
+
+function mergeRpgProfileLocal(existing, incoming = null) {
+  const base = createDefaultRpgProfileLocal();
+  const cur = (existing && typeof existing === 'object') ? existing : {};
+  const inc = (incoming && typeof incoming === 'object') ? incoming : {};
+  const hasActiveTask = Object.prototype.hasOwnProperty.call(inc, 'activeTask');
+  const merged = {
+    ...base,
+    ...cur,
+    ...inc,
+    resources: { ...base.resources, ...(cur.resources || {}), ...(inc.resources || {}) },
+    cooldowns: { ...(cur.cooldowns || {}), ...(inc.cooldowns || {}) },
+    toolLevels: { ...base.toolLevels, ...(cur.toolLevels || {}), ...(inc.toolLevels || {}) },
+    jobMasteryHours: { ...base.jobMasteryHours, ...(cur.jobMasteryHours || {}), ...(inc.jobMasteryHours || {}) },
+    stats: { ...base.stats, ...(cur.stats || {}), ...(inc.stats || {}) },
+    claimedQuests: { ...(cur.claimedQuests || {}), ...(inc.claimedQuests || {}) },
+    votes: { ...base.votes, ...(cur.votes || {}), ...(inc.votes || {}) },
+    activeTask: hasActiveTask ? (inc.activeTask || null) : (cur.activeTask || null),
+  };
+  const bootsLvl = Math.max(0, Math.min(5, Number(merged.toolLevels?.boots || 0)));
+  merged.maxEnergy = Math.min(150, 100 + bootsLvl * 10);
+  merged.energy = Math.max(0, Math.min(merged.maxEnergy, Number(merged.energy ?? base.energy)));
+  merged.comfortBonusCount = Math.max(0, Math.min(6, Number(merged.comfortBonusCount || 0)));
+  merged.wellRested = Boolean(merged.wellRested);
+  return merged;
 }
 
 function createStarterHouseLocal(username, index = 0, passwordHash = null) {
@@ -182,7 +222,7 @@ function handleLocalApi(urlStr, options = {}) {
     if (currentUser) {
       const h = db.houses[currentUser.toLowerCase()];
       if (h) {
-        if (!h.rpg) h.rpg = createDefaultRpgProfileLocal();
+        h.rpg = mergeRpgProfileLocal(h.rpg);
         rpg = h.rpg;
       }
     }
@@ -224,7 +264,7 @@ function handleLocalApi(urlStr, options = {}) {
       house.passwordHash = hashPasswordLocal(password);
     }
 
-    if (!house.rpg) house.rpg = createDefaultRpgProfileLocal();
+    house.rpg = mergeRpgProfileLocal(house.rpg);
     db.sessions[SESSION_TOKEN] = resident.name;
     saveLocalDb(db);
     return jsonResp(200, { ok: true, username: resident.name, rpg: house.rpg });
@@ -236,10 +276,7 @@ function handleLocalApi(urlStr, options = {}) {
     const key = targetUser.toLowerCase();
     if (!db.houses[key]) db.houses[key] = createStarterHouseLocal(targetUser);
     if (body.rpg && typeof body.rpg === 'object') {
-      db.houses[key].rpg = {
-        ...(db.houses[key].rpg || createDefaultRpgProfileLocal()),
-        ...body.rpg,
-      };
+      db.houses[key].rpg = mergeRpgProfileLocal(db.houses[key].rpg, body.rpg);
       saveLocalDb(db);
     }
     return jsonResp(200, { ok: true, rpg: db.houses[key].rpg });
@@ -269,7 +306,7 @@ function handleLocalApi(urlStr, options = {}) {
     delete db.pendingClaims[code];
     const key = pending.username.toLowerCase();
     if (!db.houses[key]) db.houses[key] = createStarterHouseLocal(pending.username);
-    if (!db.houses[key].rpg) db.houses[key].rpg = createDefaultRpgProfileLocal();
+    db.houses[key].rpg = mergeRpgProfileLocal(db.houses[key].rpg);
     saveLocalDb(db);
     return jsonResp(200, { ok: true, username: pending.username, rpg: db.houses[key].rpg });
   }
@@ -534,8 +571,10 @@ const PLACES = {
     at: 'a főtéren', to: 'a főtérre',
     story: 'A falu macskaköves főtere, ahol minden este 20:00-kor összegyűlik a falu apraja-nagyja. Tavasztól őszig díszkút áll a közepén, télen (havas tájon) pedig itt lobog a tábortűz és itt ragyog a falu karácsonyfája!',
     actions: [
-      { id: 'rest_foter_walk', label: '🏛️ Korzózás és Beszélgetés (+10% Energia, +10 XP)', deltaEnergy: 10, deltaXp: 10, cooldownSec: 90, msg: 'Körbesétáltál a Főtéren és beszélgettél a falubeliekkel! (+10% Energia, +10 XP)' },
-      { id: 'rest_bogracs', label: '🍲 Bográcsgulyás (-14 Tallér → +45% Energia, +10 XP)', costCoins: 14, deltaEnergy: 45, deltaXp: 10, cooldownSec: 90, msg: 'Ettél egy tál tüzes bográcsgulyást a Főtéren! (+45% Energia)' },
+      { id: 'rest_foter_walk', label: '🏛️ Korzózás és Beszélgetés (+10 Energia, +10 XP)', deltaEnergy: 10, deltaXp: 10, cooldownSec: 90, msg: 'Körbesétáltál a Főtéren és beszélgettél a falubeliekkel! (+10 Energia, +10 XP)' },
+      { id: 'rest_bogracs', label: '🍲 Bográcsgulyás (-14 Tallér → +45 Energia, +10 XP)', costCoins: 14, deltaEnergy: 45, deltaXp: 10, cooldownSec: 90, msg: 'Ettél egy tál tüzes bográcsgulyást a Főtéren! (+45 Energia)' },
+      { label: '👑 Műszak: Főtéri Falubíró (1 óra · 6. sz.)', startJobId: 'job_magistrate', hours: 1 },
+      { label: '🎒 Munka & Műszakok megnyitása', onClick: () => openActivitiesDrawer('work') },
       { label: '📋 Főtéri Üzenőtábla megnyitása (Üres)', onClick: () => selectLandmark('uzenotabla') },
       { label: '🎄 Váltás Téli Főtérre (Tábortűz + Karácsonyfa)', onClick: () => applySeason('tel') },
       { label: '🗳️ Falugyűlés & Szavazás megnyitása', onClick: () => openActivitiesDrawer('community') },
@@ -566,8 +605,10 @@ const PLACES = {
     at: 'a kocsmánál', to: 'a kocsmához',
     story: 'A falu 84-12-re a kocsmát szavazta meg a könyvtár helyett. A hordók mindig tele vannak.',
     actions: [
-      { id: 'rest_pub_drink', label: '🍺 Koccintás és Pihenés (-8 Tallér → +25% Energia, +10 XP)', costCoins: 8, deltaEnergy: 25, deltaXp: 10, cooldownSec: 60, msg: 'Koccintottál a lakókkal, és meghallgattad a legújabb falusi pletykákat! (+25% Energia)' },
-      { id: 'job_pub', label: '🔨 Munka: Csapos műszak (-25% Energia → +28 Tallér, +18 XP)', costEnergy: 25, deltaCoins: 28, deltaXp: 18, cooldownSec: 120, msg: 'Beálltál a pult mögé segíteni @csapos_bela mellé! (+28 Tallér, +18 XP)' },
+      { id: 'rest_pub_drink', label: '🍺 Koccintás és Pihenés (-8 Tallér → +25 Energia, +10 XP)', costCoins: 8, deltaEnergy: 25, deltaXp: 10, cooldownSec: 60, msg: 'Koccintottál a lakókkal, és meghallgattad a legújabb falusi pletykákat! (+25 Energia)' },
+      { label: '🍺 Műszak: Csapos (1 óra · 3. sz.)', startJobId: 'job_pub', hours: 1 },
+      { label: '🍺 Műszak: Csapos (2 óra · 3. sz.)', startJobId: 'job_pub', hours: 2 },
+      { label: '🎒 Munka fül megnyitása', onClick: () => openActivitiesDrawer('work') },
     ],
   },
   vadaszhaz: {
@@ -577,8 +618,11 @@ const PLACES = {
     at: 'a vadászháznál', to: 'a vadászházhoz',
     story: 'Az északi folyóparton, a sűrű erdő szélén áll. Innen indulnak a vadászok és a favágók.',
     actions: [
-      { id: 'job_wood', label: '🪓 Munka: Favágás (-22% Energia → +2 Fa, +18 Tallér)', costEnergy: 22, deltaCoins: 18, deltaXp: 15, deltaRes: { fa: 2 }, cooldownSec: 90, msg: 'Kivágtál és felaprítottál két öl tűzifát! (+2 🪵 Fa, +18 Tallér)' },
-      { id: 'job_hunt', label: '🏹 Munka: Vadászat (-25% Energia → +26 Tallér, +18 XP)', costEnergy: 25, deltaCoins: 26, deltaXp: 18, cooldownSec: 120, msg: 'Sikeresen visszatértél az erdei portyáról! (+26 Tallér, +18 XP)' },
+      { label: '🪓 Favágás (1 óra)', startJobId: 'job_wood', hours: 1 },
+      { label: '🪓 Favágás (2 óra)', startJobId: 'job_wood', hours: 2 },
+      { label: '🪓 Favágás (4 óra)', startJobId: 'job_wood', hours: 4 },
+      { label: '🏹 Fővadász Expedíció (1 óra · 4. sz.)', startJobId: 'job_hunt', hours: 1 },
+      { label: '🎒 Munka fül megnyitása', onClick: () => openActivitiesDrawer('work') },
     ],
   },
   piac: {
@@ -588,9 +632,11 @@ const PLACES = {
     at: 'a piacon', to: 'a piacra',
     story: 'Friss sajt, lángos, méz és gyógynövények kaphatók a színes ponyvás standoknál.',
     actions: [
-      { id: 'job_market', label: '🧀 Munka: Árusítás a standnál (-16% Energia → +18 Tallér)', costEnergy: 16, deltaCoins: 18, deltaXp: 12, cooldownSec: 75, msg: 'Eladtad a friss portékát a piacon! (+18 Tallér, +12 XP)' },
-      { id: 'rest_langos', label: '🥨 Lángos vásárlása (-10 Tallér → +35% Energia)', costCoins: 10, deltaEnergy: 35, deltaXp: 8, cooldownSec: 60, msg: 'Friss fokhagymás-tejfölös lángost ettél @langos_laci standjánál! (+35% Energia)' },
+      { label: '🧀 Piaci Kereskedő (1 óra · 3. sz.)', startJobId: 'job_market', hours: 1 },
+      { label: '🧀 Piaci Kereskedő (2 óra · 3. sz.)', startJobId: 'job_market', hours: 2 },
+      { id: 'rest_langos', label: '🥨 Lángos vásárlása (-10 Tallér → +35 Energia)', costCoins: 10, deltaEnergy: 35, deltaXp: 8, cooldownSec: 60, msg: 'Friss fokhagymás-tejfölös lángost ettél @langos_laci standjánál! (+35 Energia)' },
       { label: '🛋️ Bútorbolt & Barkácsműhely megnyitása', onClick: () => openActivitiesDrawer('shop') },
+      { label: '⚒️ Fejlesztés & Céh megnyitása', onClick: () => openActivitiesDrawer('upgrades') },
     ],
   },
   steg: {
@@ -600,8 +646,10 @@ const PLACES = {
     at: 'a stégen', to: 'a stégre',
     story: 'A folyó legmélyebb kanyarja fölé nyúlik be. A horgászok szerint kapitális harcsák laknak odalent.',
     actions: [
-      { id: 'job_fish', label: '🎣 Munka: Horgászat (-14% Energia → +2 Hal, +12 Tallér)', costEnergy: 14, deltaCoins: 12, deltaXp: 10, deltaRes: { hal: 2 }, cooldownSec: 60, msg: 'Bedobtad a csalit a folyóba… és kifogtál két szép pontyot! (+2 🐟 Hal, +12 Tallér)' },
-      { id: 'rest_river', label: '🌊 Pihenés a vízparton (+12% Energia)', deltaEnergy: 12, deltaXp: 5, cooldownSec: 90, msg: 'Leültél a stég szélére, és hallgatod a folyó csobogását. (+12% Energia)' },
+      { label: '🎣 Parti Horgászat (1 óra)', startJobId: 'job_fish', hours: 1 },
+      { label: '🎣 Parti Horgászat (2 óra)', startJobId: 'job_fish', hours: 2 },
+      { label: '🎣 Parti Horgászat (4 óra)', startJobId: 'job_fish', hours: 4 },
+      { id: 'rest_river', label: '🌊 Pihenés a vízparton (+12 Energia)', deltaEnergy: 12, deltaXp: 5, cooldownSec: 90, msg: 'Leültél a stég szélére, és hallgatod a folyó csobogását. (+12 Energia)' },
     ],
   },
   hid: {
@@ -611,7 +659,9 @@ const PLACES = {
     at: 'a hídnál', to: 'a hídhoz',
     story: 'Az egyetlen száraz átkelő a folyó déli és északi partja között.',
     actions: [
-      { id: 'job_bridge', label: '🛡️ Munka: Hídőrség (-12% Energia → +14 Tallér)', costEnergy: 12, deltaCoins: 14, deltaXp: 10, cooldownSec: 60, msg: 'Ellenőrizted a hídon átkelő szekereket és vándorokat! (+14 Tallér)' },
+      { label: '🛡️ Hídőrség (1 óra · 2. sz.)', startJobId: 'job_bridge', hours: 1 },
+      { label: '🛡️ Hídőrség (2 óra · 2. sz.)', startJobId: 'job_bridge', hours: 2 },
+      { label: '🎒 Munka fül megnyitása', onClick: () => openActivitiesDrawer('work') },
     ],
   },
   malom: {
@@ -621,7 +671,10 @@ const PLACES = {
     at: 'a szélmalomnál', to: 'a szélmalomhoz',
     story: 'A vitorlák éjjel-nappal forognak, itt őrlik a falu lisztjét a lángoshoz és a kenyérhez.',
     actions: [
-      { id: 'job_mill', label: '🌾 Munka: Búzaőrlés (-18% Energia → +2 Liszt, +15 Tallér)', costEnergy: 18, deltaCoins: 15, deltaXp: 12, deltaRes: { liszt: 2 }, cooldownSec: 75, msg: 'Felöntötted a garatra a búzát, friss liszt készült a falunak! (+2 🌾 Liszt, +15 Tallér)' },
+      { label: '🌾 Búzaőrlés (1 óra · 2. sz.)', startJobId: 'job_mill', hours: 1 },
+      { label: '🌾 Búzaőrlés (2 óra · 2. sz.)', startJobId: 'job_mill', hours: 2 },
+      { label: '⚒️ Építőmester & Ácsbrigád (1 óra · 5. sz.)', startJobId: 'job_carpenter', hours: 1 },
+      { label: '🎒 Munka fül megnyitása', onClick: () => openActivitiesDrawer('work') },
     ],
   },
   legelo: {
@@ -631,7 +684,9 @@ const PLACES = {
     at: 'a legelőn', to: 'a legelőre',
     story: 'Bekerített zöld legelő itatóval, ahol a falu tehenei és bárányai békésen legelésznek.',
     actions: [
-      { id: 'job_milk', label: '🐄 Munka: Állatgondozás & Fejés (-18% Energia → +2 Tej, +15 Tallér)', costEnergy: 18, deltaCoins: 15, deltaXp: 12, deltaRes: { tej: 2 }, cooldownSec: 75, msg: 'Megtöltötted a vályút friss vízzel, és megfejted a teheneket! (+2 🥛 Tej, +15 Tallér)' },
+      { label: '🐄 Állatgondozás & Fejés (1 óra)', startJobId: 'job_milk', hours: 1 },
+      { label: '🐄 Állatgondozás & Fejés (2 óra)', startJobId: 'job_milk', hours: 2 },
+      { label: '🐄 Állatgondozás & Fejés (4 óra)', startJobId: 'job_milk', hours: 4 },
     ],
   },
   gemeskut: {
@@ -641,7 +696,8 @@ const PLACES = {
     at: 'a gémeskútnál', to: 'a gémeskúthoz',
     story: 'Hűvös vizet ad a bográcsba és a megfáradt vándoroknak.',
     actions: [
-      { id: 'rest_well', label: '🪣 Vízhúzás a kútból (+15% Energia, Ingyenes)', deltaEnergy: 15, deltaXp: 4, cooldownSec: 120, msg: 'Húztál egy vödör jéghideg kútvizet és felfrissültél! (+15% Energia)' },
+      { id: 'rest_well', label: '🪣 Vízhúzás a kútból (+15 Energia, Ingyenes)', deltaEnergy: 15, deltaXp: 4, cooldownSec: 120, msg: 'Húztál egy vödör jéghideg kútvizet és felfrissültél! (+15 Energia)' },
+      { label: '🍲 Pihenés fül megnyitása', onClick: () => openActivitiesDrawer('rest') },
     ],
   },
 };
@@ -1117,21 +1173,22 @@ function ensureValidResidentPlot(res, occupied = []) {
 
 // Keresőben megjelenő Menüpontok és Akciók listája (Munka, Pihenés, Bolt, Küldetések, Szoba stb.)
 const ACTION_MENU_ITEMS = [
-  { id: 'act_menu_hub', title: 'Falusi Élet & Tevékenységek Központ (Főmenü)', sub: 'Munka, Pihenés, Bútorbolt, Barkácsolás és Napi Küldetések', type: 'act_tab', tab: 'work' },
-  { id: 'act_shop', title: 'Bútorbolt és Barkácsműhely (Új 3D bútorok)', sub: 'Vásárolj vagy barkácsolj lámpát, könyvespolcot, növényt a szobádba', type: 'act_tab', tab: 'shop' },
+  { id: 'act_menu_hub', title: 'Falusi Élet & Tevékenységek Központ (Főmenü)', sub: '1–4 órás műszakok, Pihenés, Fejlesztés & Céh, Bútorbolt és Küldetések', type: 'act_tab', tab: 'work' },
+  { id: 'act_upgrades', title: 'Fejlesztés & Céh (Szerszámok 0–5 és Kézműves Receptek)', sub: 'Fejlessz fejszét, horgászbotot, malomkövet, mérleget, csizmát és készíts ételeket', type: 'act_tab', tab: 'upgrades' },
+  { id: 'act_shop', title: 'Bútorbolt és Barkácsműhely (Új 3D bútorok)', sub: 'Vásárolj vagy barkácsolj lámpát, könyvespolcot, növényt a szobádba (komfort bónusz!)', type: 'act_tab', tab: 'shop' },
   { id: 'act_quests', title: 'Napi Küldetések és Falugyűlés Szavazás', sub: 'Szavazz a falu következő épületére és szerezz jutalom Tallért', type: 'act_tab', tab: 'community' },
   { id: 'act_leaderboard', title: 'Falusi Ranglista & Dicsőségfal (XP és Tallér)', sub: 'Kövesd az élmezőnyt és a lakosok toplistáját (Top 3 kiemelve)', type: 'act_tab', tab: 'leaderboard' },
   { id: 'act_walk', title: 'Vándorlás és Séta (WASD + Mobil érintőpad mód)', sub: 'Szabad séta saját karakterrel a faluban', type: 'walk' },
   { id: 'act_fire', title: 'Főtér: Falugyűlés, Korzózás és Téli Karácsonyfa', sub: 'A falu központi főtere (télen tábortűzzel és karácsonyfával)', type: 'place', placeKey: 'tuz' },
   { id: 'act_board', title: 'Főtéri Üzenőtábla (Közösségi hirdetőtábla)', sub: 'Falu hirdetőtáblája a Főtéren (jelenleg üres)', type: 'place', placeKey: 'uzenotabla' },
   { id: 'act_room', title: 'Szobaberendezés és Ajándékozás', sub: 'Bútorok lerakása, zárt ház meghívólink, ajándék', type: 'my_room' },
-  { id: 'act_rest', title: 'Pihenés és Alvás (Saját ház – +55% Energia, 5p Cooldown)', sub: 'Hazatérés a saját házadhoz és energiafeltöltés', type: 'act_tab', tab: 'rest' },
-  { id: 'act_hunt', title: 'Munka: Vadászat és Favágás (+Fa, +Tallér)', sub: 'Vadászház az északi erdőszélen', type: 'place', placeKey: 'vadaszhaz' },
-  { id: 'act_mill', title: 'Munka: Lisztőrlés a Szélmalomban (+Liszt, +Tallér)', sub: 'Dombvidéki szélmalom', type: 'place', placeKey: 'malom' },
+  { id: 'act_rest', title: 'Pihenés és Alvás (1–8 óra otthon + falusi frissítők)', sub: 'Otthoni pihenés (8 óra = +80 Energia + Kipihent Lélek) és gyors ételek', type: 'act_tab', tab: 'rest' },
+  { id: 'act_hunt', title: 'Munka: Vadászat és Favágás (+Fa, +Tallér)', sub: 'Vadászház az északi erdőszélen (1–4 órás műszak)', type: 'place', placeKey: 'vadaszhaz' },
+  { id: 'act_mill', title: 'Munka: Lisztőrlés a Szélmalomban (+Liszt, +Tallér)', sub: 'Dombvidéki szélmalom (1–4 órás műszak)', type: 'place', placeKey: 'malom' },
   { id: 'act_market', title: 'Munka: Kereskedés a Piacon (+Tallér, Nyersanyag eladás)', sub: 'Árusítás és vásárlás a falusi piacon', type: 'place', placeKey: 'piac' },
-  { id: 'act_pasture', title: 'Munka: Állatgondozás a Legelőn (+Tej, +Tallér)', sub: 'Tehenek és bárányok ellátása', type: 'place', placeKey: 'legelo' },
+  { id: 'act_pasture', title: 'Munka: Állatgondozás a Legelőn (+Tej, +Tallér)', sub: 'Tehenek és bárányok ellátása (1–4 órás műszak)', type: 'place', placeKey: 'legelo' },
   { id: 'act_pub', title: 'Kikapcsolódás és Munka a Kocsmában (+Tallér / +Energia)', sub: 'Italok, pletykák és csapos műszak', type: 'place', placeKey: 'kocsma' },
-  { id: 'act_fish', title: 'Horgászat és Pihenés a Stégen (+Hal, +Tallér)', sub: 'Pecázás a folyóparton', type: 'place', placeKey: 'steg' },
+  { id: 'act_fish', title: 'Horgászat és Pihenés a Stégen (+Hal, +Tallér)', sub: 'Pecázás a folyóparton (1–4 órás műszak)', type: 'place', placeKey: 'steg' },
 ];
 
 function hash(text, seed = 0) {
@@ -1144,7 +1201,7 @@ function hash(text, seed = 0) {
 }
 
 // --- 1. Adatok és Session betöltése (Cache-busting verzióval) ---
-const APP_VERSION = '20261115-6';
+const APP_VERSION = '20261116-1';
 const villageResp = await fetch(`./village.json?v=${APP_VERSION}`, { cache: 'no-store' });
 const villageData = await villageResp.json();
 villageData.maxHouses = villageData.maxHouses || 48;
@@ -4136,6 +4193,42 @@ function computeDynamicProgress(res, elapsedSec) {
 }
 
 function whereIs(res, sec) {
+  if (
+    currentConnectedUser &&
+    res?.name &&
+    res.name.toLowerCase() === currentConnectedUser.toLowerCase() &&
+    playerRpg?.activeTask
+  ) {
+    const task = playerRpg.activeTask;
+    if (task.kind === 'rest') {
+      return {
+        mode: 'sleep',
+        returning: false,
+        x: res.door[0],
+        z: res.door[1],
+        heading: res.rot || 0,
+        speed: 0,
+        dist: 0,
+        visible: false,
+      };
+    }
+    if (task.kind === 'work' && task.placeKey && PLACES[task.placeKey]) {
+      const [wx, wz] = spotNearPlace(res, task.placeKey);
+      const p = PLACES[task.placeKey];
+      return {
+        mode: 'work',
+        targetKey: task.placeKey,
+        returning: false,
+        x: wx,
+        z: wz,
+        heading: Math.atan2(p.x - wx, p.z - wz),
+        speed: 0,
+        dist: 0,
+        visible: true,
+      };
+    }
+  }
+
   const bedtimeHour = 19.0 + hash(res.name, 11) * 3.0; // Random 19:00 - 22:00 között
   const wakeHour = 5.0 + hash(res.name, 12) * 3.0;    // Random 5:00 - 8:00 között
   const bedtimeSec = bedtimeHour * HOUR;
@@ -4758,6 +4851,13 @@ async function enterHouseInterior(houseOwnerName, explicitInviteKey = null) {
 
   rebuildRoom3D();
   renderRoomEditorUI();
+  if (data.isOwner && Array.isArray(data.items) && playerRpg) {
+    const comfortCount = computeComfortCountFromItems(data.items);
+    if (playerRpg.comfortBonusCount !== comfortCount) {
+      playerRpg.comfortBonusCount = comfortCount;
+      savePlayerRpg(false);
+    }
+  }
   syncResponsiveUIState();
   renderer.shadowMap.needsUpdate = true;
 }
@@ -4863,6 +4963,10 @@ el('room-save-btn').addEventListener('click', async () => {
   });
   if (resp.ok) {
     housePrivacyMap[activeRoomData.owner.toLowerCase()] = activeRoomData.privacy;
+    if (playerRpg && Array.isArray(activeRoomData.items)) {
+      playerRpg.comfortBonusCount = computeComfortCountFromItems(activeRoomData.items);
+      savePlayerRpg();
+    }
     btn.textContent = '✓ Elmentve!';
   } else {
     btn.textContent = 'Hiba a mentéskor';
@@ -5126,6 +5230,7 @@ el('claim-logout-btn').addEventListener('click', async () => {
   await apiFetch('/api/claim/logout', { method: 'POST' });
   currentConnectedUser = null;
   localStorage.removeItem('kisfalu_my_user');
+  if (typeof switchActiveUserRpg === 'function') switchActiveUserRpg(null, null);
   updateClaimButtonUI();
   updateMyHomeBeaconPosition();
   openClaimDrawer();
@@ -5177,6 +5282,22 @@ function openCustomizePanel(res) {
 }
 
 function statusTextFor(res, sec) {
+  if (
+    currentConnectedUser &&
+    res?.name &&
+    res.name.toLowerCase() === currentConnectedUser.toLowerCase() &&
+    playerRpg?.activeTask
+  ) {
+    const task = playerRpg.activeTask;
+    const remStr = formatDurationHMS(Math.max(0, task.endsAt - Date.now()));
+    if (task.kind === 'work') {
+      return `🔨 Műszakban: ${task.title} (hátravan: ${remStr})`;
+    }
+    if (task.kind === 'rest') {
+      return `🛌 Otthon pihen (hátravan: ${remStr})`;
+    }
+  }
+
   const bedtimeHour = 19.0 + hash(res.name, 11) * 3.0; // 19:00 - 22:00
   const wakeHour = 5.0 + hash(res.name, 12) * 3.0;    // 5:00 - 8:00
   const bedtimeSec = bedtimeHour * HOUR;
@@ -5253,8 +5374,100 @@ function updateCardPrivacyBadge(res) {
   }
 }
 
-// --- 11.2 FELHASZNÁLÓHOZ KÖTÖTT RPG GAZDASÁG, IDŐ-LIMITEK (COOLDOWN) & KIEGYENSÚLYOZOTT ÁRAK ---
-const ENERGY_REGEN_INTERVAL_MS = 20000; // +1% Energia 20 másodpercenként
+// --- 11.2 FELHASZNÁLÓHOZ KÖTÖTT RPG GAZDASÁG, SZINTRENDSZER, IDŐZÍTETT MŰSZAKOK & CÉH ---
+const ENERGY_REGEN_INTERVAL_MS = 20000; // +1 Energia 20 másodpercenként
+
+const RESOURCE_META = {
+  fa: { icon: '🪵', label: 'Fa', sellPrice: 5 },
+  liszt: { icon: '🌾', label: 'Liszt', sellPrice: 6 },
+  hal: { icon: '🐟', label: 'Hal', sellPrice: 8 },
+  tej: { icon: '🥛', label: 'Tej', sellPrice: 6 },
+};
+
+function formatResBundle(resObj) {
+  if (!resObj) return '';
+  return Object.entries(resObj)
+    .filter(([, amt]) => Number(amt) > 0)
+    .map(([k, amt]) => {
+      const meta = RESOURCE_META[k] || { icon: '', label: k };
+      return `+${amt} ${meta.icon} ${meta.label}`.trim();
+    })
+    .join(', ');
+}
+
+function formatCostRes(resObj) {
+  if (!resObj) return '';
+  return Object.entries(resObj)
+    .filter(([, amt]) => Number(amt) > 0)
+    .map(([k, amt]) => {
+      const meta = RESOURCE_META[k] || { icon: '', label: k };
+      return `${amt} ${meta.icon} ${meta.label}`.trim();
+    })
+    .join(' + ');
+}
+
+function hasEnoughResources(costRes) {
+  if (!costRes || !playerRpg?.resources) return true;
+  return Object.entries(costRes).every(([k, amt]) => (playerRpg.resources[k] || 0) >= amt);
+}
+
+function spendResources(costRes) {
+  if (!costRes || !playerRpg?.resources) return;
+  for (const [k, amt] of Object.entries(costRes)) {
+    playerRpg.resources[k] = Math.max(0, (playerRpg.resources[k] || 0) - amt);
+  }
+}
+
+function formatDurationHMS(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function getMaxEnergy(rpgObj = playerRpg) {
+  const bootsLvl = Math.max(0, Math.min(5, Number(rpgObj?.toolLevels?.boots || 0)));
+  return Math.min(150, 100 + bootsLvl * 10);
+}
+
+const COMFORT_FURNITURE_TYPES = new Set(['kandallo', 'konyvespolc', 'lampa', 'noveny', 'mini_fenyo', 'bogracs_disz']);
+function computeComfortCountFromItems(items) {
+  if (!Array.isArray(items)) return 0;
+  const placedComfort = items.filter((i) => i && i.placed && COMFORT_FURNITURE_TYPES.has(i.type));
+  return Math.min(6, placedComfort.length);
+}
+
+async function refreshComfortCount() {
+  if (!playerRpg) return 0;
+  if (activeRoomData?.isOwner && Array.isArray(activeRoomData.items)) {
+    const count = computeComfortCountFromItems(activeRoomData.items);
+    if (playerRpg.comfortBonusCount !== count) {
+      playerRpg.comfortBonusCount = count;
+      savePlayerRpg(false);
+    }
+    return count;
+  }
+  if (!currentConnectedUser) return playerRpg.comfortBonusCount || 0;
+  try {
+    const resp = await apiFetch(`/api/house?name=${encodeURIComponent(currentConnectedUser.toLowerCase())}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.allowed && Array.isArray(data.items)) {
+        const count = computeComfortCountFromItems(data.items);
+        if (playerRpg.comfortBonusCount !== count) {
+          playerRpg.comfortBonusCount = count;
+          savePlayerRpg(false);
+          if (el('activities-drawer') && !el('activities-drawer').hidden && typeof renderActivitiesContent === 'function') {
+            renderActivitiesContent();
+          }
+        }
+        return count;
+      }
+    }
+  } catch { /* fallback */ }
+  return playerRpg.comfortBonusCount || 0;
+}
 
 function getStorageKeyForUser(username) {
   const u = (username || currentConnectedUser || 'guest').toLowerCase();
@@ -5262,14 +5475,17 @@ function getStorageKeyForUser(username) {
 }
 
 function applyPassiveEnergyRegen(rpgObj) {
+  const maxE = getMaxEnergy(rpgObj);
+  rpgObj.maxEnergy = maxE;
   const now = Date.now();
   const last = rpgObj.lastEnergyUpdate || now;
   const elapsed = Math.max(0, now - last);
-  if (rpgObj.energy < 100 && elapsed >= ENERGY_REGEN_INTERVAL_MS) {
+  if (rpgObj.energy > maxE) rpgObj.energy = maxE;
+  if (rpgObj.energy < maxE && elapsed >= ENERGY_REGEN_INTERVAL_MS) {
     const gained = Math.floor(elapsed / ENERGY_REGEN_INTERVAL_MS);
-    rpgObj.energy = Math.min(100, rpgObj.energy + gained);
+    rpgObj.energy = Math.min(maxE, rpgObj.energy + gained);
     rpgObj.lastEnergyUpdate = last + gained * ENERGY_REGEN_INTERVAL_MS;
-  } else if (rpgObj.energy >= 100) {
+  } else if (rpgObj.energy >= maxE) {
     rpgObj.lastEnergyUpdate = now;
   }
   return rpgObj;
@@ -5284,16 +5500,27 @@ function loadUserRpg(username, serverRpg = null) {
   } catch { /* fallback */ }
 
   const base = createDefaultRpgProfileLocal();
+  const s = (serverRpg && typeof serverRpg === 'object') ? serverRpg : {};
+  const l = (loaded && typeof loaded === 'object') ? loaded : {};
   const merged = {
     ...base,
-    ...(serverRpg || {}),
-    ...(loaded || {}),
-    resources: { ...base.resources, ...(serverRpg?.resources || {}), ...(loaded?.resources || {}) },
-    cooldowns: { ...(serverRpg?.cooldowns || {}), ...(loaded?.cooldowns || {}) },
-    stats: { ...base.stats, ...(serverRpg?.stats || {}), ...(loaded?.stats || {}) },
-    claimedQuests: { ...(serverRpg?.claimedQuests || {}), ...(loaded?.claimedQuests || {}) },
-    votes: { ...base.votes, ...(serverRpg?.votes || {}), ...(loaded?.votes || {}) },
+    ...s,
+    ...l,
+    resources: { ...base.resources, ...(s.resources || {}), ...(l.resources || {}) },
+    cooldowns: { ...(s.cooldowns || {}), ...(l.cooldowns || {}) },
+    toolLevels: { ...base.toolLevels, ...(s.toolLevels || {}), ...(l.toolLevels || {}) },
+    jobMasteryHours: { ...base.jobMasteryHours, ...(s.jobMasteryHours || {}), ...(l.jobMasteryHours || {}) },
+    stats: { ...base.stats, ...(s.stats || {}), ...(l.stats || {}) },
+    claimedQuests: { ...(s.claimedQuests || {}), ...(l.claimedQuests || {}) },
+    votes: { ...base.votes, ...(s.votes || {}), ...(l.votes || {}) },
+    wellRested: Boolean(l.wellRested !== undefined ? l.wellRested : s.wellRested),
+    comfortBonusCount: Math.max(0, Math.min(6, Number(l.comfortBonusCount !== undefined ? l.comfortBonusCount : (s.comfortBonusCount || 0)))),
+    activeTask: Object.prototype.hasOwnProperty.call(l, 'activeTask')
+      ? (l.activeTask || null)
+      : (Object.prototype.hasOwnProperty.call(s, 'activeTask') ? (s.activeTask || null) : null),
   };
+  merged.maxEnergy = getMaxEnergy(merged);
+  merged.energy = Math.max(0, Math.min(merged.maxEnergy, Number(merged.energy ?? base.energy)));
   return applyPassiveEnergyRegen(merged);
 }
 
@@ -5301,12 +5528,21 @@ playerRpg = loadUserRpg(currentConnectedUser, meData.rpg);
 
 function switchActiveUserRpg(username, serverRpg = null) {
   playerRpg = loadUserRpg(username, serverRpg);
-  savePlayerRpg(false);
-  if (!el('activities-drawer').hidden) renderActivitiesContent();
+  if (playerRpg?.activeTask && Date.now() >= playerRpg.activeTask.endsAt && typeof completeActiveTask === 'function') {
+    completeActiveTask(false);
+  } else {
+    savePlayerRpg(false);
+  }
+  if (username) refreshComfortCount();
+  if (el('activities-drawer') && !el('activities-drawer').hidden && typeof renderActivitiesContent === 'function') {
+    renderActivitiesContent();
+  }
 }
 
 function savePlayerRpg(syncToServer = true) {
   if (!playerRpg) return;
+  playerRpg.maxEnergy = getMaxEnergy(playerRpg);
+  playerRpg.energy = Math.max(0, Math.min(playerRpg.maxEnergy, Number(playerRpg.energy || 0)));
   playerRpg.lastEnergyUpdate = playerRpg.lastEnergyUpdate || Date.now();
   localStorage.setItem(getStorageKeyForUser(currentConnectedUser), JSON.stringify(playerRpg));
   updatePlayerStatsUI();
@@ -5340,23 +5576,108 @@ function formatCooldown(sec) {
   return `${s} mp`;
 }
 
-const LEVEL_TITLES = ['Beköltöző', 'Falusi Polgár', 'Mesterember', 'Tanácsnok', 'Falubíró', 'Főispán'];
-function getPlayerLevelInfo() {
-  const lvl = Math.floor(((playerRpg && playerRpg.xp) || 0) / 50) + 1;
-  const title = LEVEL_TITLES[Math.min(lvl - 1, LEVEL_TITLES.length - 1)];
-  return { lvl, title };
+const LEVEL_DEFS = [
+  { lvl: 1, minXp: 0, title: 'Beköltöző' },
+  { lvl: 2, minXp: 60, title: 'Falusi Polgár' },
+  { lvl: 3, minXp: 160, title: 'Szorgos Iparos' },
+  { lvl: 4, minXp: 320, title: 'Mesterember' },
+  { lvl: 5, minXp: 550, title: 'Céhmester' },
+  { lvl: 6, minXp: 850, title: 'Tanácsnok' },
+  { lvl: 7, minXp: 1250, title: 'Fővadász & Birtokos' },
+  { lvl: 8, minXp: 1750, title: 'Falubíró' },
+  { lvl: 9, minXp: 2400, title: 'Alispán' },
+  { lvl: 10, minXp: 3200, title: 'Főispán' },
+];
+
+function getPlayerLevelInfo(xpInput = null) {
+  const currentXp = Math.max(0, Math.floor(xpInput !== null ? xpInput : ((playerRpg && playerRpg.xp) || 0)));
+  let defIdx = 0;
+  for (let i = 0; i < LEVEL_DEFS.length; i++) {
+    if (currentXp >= LEVEL_DEFS[i].minXp) defIdx = i;
+  }
+  const currentDef = LEVEL_DEFS[defIdx];
+  const nextDef = LEVEL_DEFS[defIdx + 1] || null;
+  const lvl = currentDef.lvl;
+  const title = currentDef.title;
+  const prevLevelXp = currentDef.minXp;
+  const nextLevelXp = nextDef ? nextDef.minXp : currentDef.minXp;
+  const progressPct = nextDef
+    ? Math.max(0, Math.min(100, Math.round(((currentXp - prevLevelXp) / Math.max(1, nextLevelXp - prevLevelXp)) * 100)))
+    : 100;
+  const coinBonusPct = (lvl - 1) * 3;
+  return { lvl, title, currentXp, prevLevelXp, nextLevelXp, progressPct, coinBonusPct, isMaxLevel: !nextDef };
+}
+
+function syncActiveTaskUI() {
+  const hudBox = el('hud-active-task');
+  const hudText = el('hud-active-task-text');
+  const progBox = el('work-progress-box');
+  const progTitle = el('work-progress-title');
+  const progTimer = el('work-progress-timer');
+  const progFill = el('work-bar-fill');
+  const progReward = el('work-progress-reward');
+
+  const task = playerRpg?.activeTask;
+  if (!task) {
+    if (hudBox) hudBox.hidden = true;
+    if (progBox) progBox.hidden = true;
+    return;
+  }
+
+  const now = Date.now();
+  const durationMs = Math.max(1, Number(task.durationMs || (task.endsAt - task.startedAt) || (task.hours || 1) * 3600000));
+  const remMs = Math.max(0, task.endsAt - now);
+  const pct = Math.max(0, Math.min(100, ((durationMs - remMs) / durationMs) * 100));
+  const remStr = formatDurationHMS(remMs);
+
+  if (hudBox) hudBox.hidden = false;
+  if (hudText) {
+    const prefix = task.kind === 'rest' ? '🛌' : '🔨';
+    hudText.textContent = `${prefix} ${task.title} (${task.hours}ó) · ${remStr}`;
+  }
+
+  if (progBox) progBox.hidden = false;
+  if (progTitle) progTitle.textContent = `${task.title} (${task.hours} óra)`;
+  if (progTimer) progTimer.textContent = remStr;
+  if (progFill) progFill.style.width = `${pct.toFixed(1)}%`;
+  if (progReward) {
+    if (task.kind === 'work') {
+      const resParts = formatResBundle(task.rewardRes);
+      progReward.textContent = `Várható jutalom: +${task.rewardCoins} Tallér, +${task.rewardXp} XP${resParts ? `, ${resParts}` : ''}`;
+    } else {
+      progReward.textContent = `Várható feltöltődés: +${task.energyGain} ⚡ Energia, +${task.xpGain} XP${task.grantsWellRested ? ' · +✨ Kipihent Lélek' : ''}`;
+    }
+  }
 }
 
 function updatePlayerStatsUI() {
   if (!playerRpg) return;
-  const { lvl, title } = getPlayerLevelInfo();
-  el('stat-coins').textContent = `💰 ${playerRpg.coins} Tallér`;
-  el('stat-level').textContent = `⭐ ${lvl}. szint (${title})`;
-  const regenHint = playerRpg.energy < 100 ? ' (+1%/20mp)' : '';
-  el('stat-energy-text').textContent = `⚡ ${playerRpg.energy}% Energia${regenHint}`;
-  el('stat-energy-fill').style.width = `${Math.max(0, Math.min(100, playerRpg.energy))}%`;
+  const { lvl, title, currentXp, nextLevelXp, progressPct, coinBonusPct, isMaxLevel } = getPlayerLevelInfo();
+  const maxEnergy = getMaxEnergy();
+  if (el('stat-coins')) el('stat-coins').textContent = `💰 ${playerRpg.coins} Tallér`;
+  if (el('stat-level')) {
+    el('stat-level').textContent = `⭐ ${lvl}. szint (${title})`;
+    el('stat-level').title = `Globális munkabónusz: +${coinBonusPct}% Tallér`;
+  }
+  const regenHint = playerRpg.energy < maxEnergy ? ' (+1/20mp)' : '';
+  if (el('stat-energy-text')) {
+    el('stat-energy-text').textContent = `⚡ ${playerRpg.energy} / ${maxEnergy} Energia${regenHint}`;
+  }
+  if (el('stat-energy-fill')) {
+    const energyPct = Math.max(0, Math.min(100, (playerRpg.energy / Math.max(1, maxEnergy)) * 100));
+    el('stat-energy-fill').style.width = `${energyPct}%`;
+  }
+  if (el('stat-xp-text')) {
+    el('stat-xp-text').textContent = isMaxLevel ? `✨ ${currentXp} XP (MAX)` : `✨ ${currentXp} / ${nextLevelXp} XP`;
+  }
+  if (el('stat-xp-fill')) {
+    el('stat-xp-fill').style.width = `${progressPct}%`;
+  }
   const r = playerRpg.resources;
-  el('stat-resources').innerHTML = `<span>🪵 Fa: <b>${r.fa}</b></span> · <span>🌾 Liszt: <b>${r.liszt}</b></span> · <span>🐟 Hal: <b>${r.hal}</b></span> · <span>🥛 Tej: <b>${r.tej}</b></span>`;
+  if (el('stat-resources')) {
+    el('stat-resources').innerHTML = `<span>🪵 Fa: <b>${r.fa}</b></span> · <span>🌾 Liszt: <b>${r.liszt}</b></span> · <span>🐟 Hal: <b>${r.hal}</b></span> · <span>🥛 Tej: <b>${r.tej}</b></span>`;
+  }
+  syncActiveTaskUI();
 }
 updatePlayerStatsUI();
 
@@ -5823,9 +6144,31 @@ updateClaimButtonUI();
 
 let currentCardActions = [];
 
+function notifyActionResult(msg, isError = false, feedbackEl = null) {
+  if (feedbackEl) {
+    feedbackEl.style.color = isError ? 'var(--red)' : 'var(--green)';
+    feedbackEl.textContent = msg;
+    feedbackEl.hidden = false;
+  }
+  if ((el('activities-drawer') && !el('activities-drawer').hidden) || !feedbackEl) {
+    showMenuToast(msg, isError);
+  }
+}
+
 function executeGameAction(act, feedbackEl = null) {
   if (act.onClick) {
     act.onClick();
+    return;
+  }
+
+  if (act.startJobId) {
+    const job = WORK_JOBS.find((j) => j.id === act.startJobId);
+    if (job) startTimedWorkShift(job, act.hours || 1, feedbackEl);
+    return;
+  }
+
+  if (act.startRestHours) {
+    startTimedRestShift(act.startRestHours, feedbackEl);
     return;
   }
 
@@ -5852,14 +6195,15 @@ function executeGameAction(act, feedbackEl = null) {
   if (playerRpg.energy < costEnergy) {
     if (feedbackEl) {
       feedbackEl.style.color = 'var(--red)';
-      feedbackEl.textContent = `⚠️ Túl fáradt vagy (${costEnergy}% Energia szükséges)! Pihenj otthon vagy egyél a Főtéren!`;
+      feedbackEl.textContent = `⚠️ Túl fáradt vagy (${costEnergy} ⚡ Energia szükséges)! Pihenj otthon vagy egyél a Főtéren!`;
       feedbackEl.hidden = false;
     }
     return;
   }
 
+  const maxEnergy = getMaxEnergy();
   playerRpg.coins = Math.max(0, playerRpg.coins - costCoins + (act.deltaCoins || 0));
-  playerRpg.energy = Math.max(0, Math.min(100, playerRpg.energy - costEnergy + (act.deltaEnergy || 0)));
+  playerRpg.energy = Math.max(0, Math.min(maxEnergy, playerRpg.energy - costEnergy + (act.deltaEnergy || 0)));
   playerRpg.lastEnergyUpdate = Date.now();
   playerRpg.xp = (playerRpg.xp || 0) + (act.deltaXp || 0);
   if (costEnergy > 0) playerRpg.stats.worksDone = (playerRpg.stats.worksDone || 0) + 1;
@@ -5883,6 +6227,23 @@ function executeGameAction(act, feedbackEl = null) {
   }
 }
 
+function getDynamicActionLabel(act) {
+  if (act.startJobId) {
+    const job = WORK_JOBS.find((j) => j.id === act.startJobId);
+    if (job) {
+      const { lvl } = getPlayerLevelInfo();
+      const s = calculateJobShift(job, act.hours || 1);
+      if (lvl < job.minLevel) return `🔒 ${act.label} (${job.minLevel}. szinttől)`;
+      return `${act.label} (-${s.energyCost}⚡ → +${s.rewardCoins}T, +${s.rewardXp}XP)`;
+    }
+  }
+  if (act.startRestHours) {
+    const r = calculateRestShift(act.startRestHours);
+    return `🛌 Otthoni pihenés (${r.hours} óra → +${r.energyGain}⚡${r.grantsWellRested ? ' + ✨' : ''})`;
+  }
+  return act.label;
+}
+
 function renderActionButtonsOnCard(actionsList, titleText = '⚡ Elérhető tevékenységek (Akciók):') {
   currentCardActions = actionsList || [];
   const boxEl = el('action-box');
@@ -5901,9 +6262,10 @@ function renderActionButtonsOnCard(actionsList, titleText = '⚡ Elérhető tev�
     b.type = 'button';
     b.className = 'ghost primary';
     b.dataset.actionId = act.id || '';
-    b.dataset.baseLabel = act.label;
+    const baseLabel = getDynamicActionLabel(act);
+    b.dataset.baseLabel = baseLabel;
     const rem = getCooldownRemainingSec(act.id);
-    b.textContent = rem > 0 ? `⏳ ${act.label} (${formatCooldown(rem)})` : act.label;
+    b.textContent = rem > 0 ? `⏳ ${baseLabel} (${formatCooldown(rem)})` : baseLabel;
     b.disabled = rem > 0;
     b.addEventListener('click', () => executeGameAction(act, fbEl));
     return b;
@@ -5923,39 +6285,170 @@ function refreshCardActionButtonsCooldownUI() {
 }
 
 let activeMenuTab = 'work';
-let workTimer = null;
+const selectedJobHours = {};
+let selectedRestHours = 8;
 
 function showMenuToast(msg, isError = false) {
   const tEl = el('menu-toast');
+  if (!tEl) return;
   tEl.hidden = false;
   tEl.style.background = isError ? '#f8d7da' : '#d1e7dd';
   tEl.style.color = isError ? '#842029' : '#0f5132';
   tEl.textContent = msg;
 }
 
-// KIEGYENSÚLYOZOTT (REBALANCED) MUNKÁK, PIHENÉS ÉS BÚTORBOLT ÁRAK + FELHASZNÁLÓHOZ KÖTÖTT COOLDOWN IDŐK
+// --- Skálázható 1–4 órás Műszakok, Mesterfokozat, 1–8 órás Otthoni Pihenés, Szerszámok & Receptek ---
+const SHIFT_HOURS_OPTIONS = [1, 2, 3, 4];
+const SHIFT_COIN_MULT = { 1: 1.0, 2: 2.5, 3: 4.5, 4: 7.0 };
+const SHIFT_ENERGY_MULT = { 1: 1.0, 2: 1.85, 3: 2.65, 4: 3.4 };
+const SHIFT_XP_MULT = { 1: 1.0, 2: 2.3, 3: 4.0, 4: 6.0 };
+const SHIFT_RES_MULT = { 1: 1, 2: 2, 3: 4, 4: 6 };
+
 const WORK_JOBS = [
-  { id: 'job_wood', title: '🪓 Favágás a Vadászháznál', desc: 'Kivágod és felaprítod a tűzifát az északi erdőszélen.', placeKey: 'vadaszhaz', costEnergy: 22, rewardCoins: 18, rewardXp: 15, rewardRes: { fa: 2 }, cooldownSec: 90, rewardLabel: '+18 Tallér, +2 🪵 Fa, +15 XP' },
-  { id: 'job_mill', title: '🌾 Búzaőrlés a Szélmalomban', desc: 'Megőrlöd a friss búzát a dombtetőn álló malomban.', placeKey: 'malom', costEnergy: 18, rewardCoins: 15, rewardXp: 12, rewardRes: { liszt: 2 }, cooldownSec: 75, rewardLabel: '+15 Tallér, +2 🌾 Liszt, +12 XP' },
-  { id: 'job_fish', title: '🎣 Horgászat a Folyóparti Stégen', desc: 'Kapitális pontyokra és harcsákra pecázol a folyón.', placeKey: 'steg', costEnergy: 14, rewardCoins: 12, rewardXp: 10, rewardRes: { hal: 2 }, cooldownSec: 60, rewardLabel: '+12 Tallér, +2 🐟 Hal, +10 XP' },
-  { id: 'job_milk', title: '🐄 Állatgondozás és Fejés a Legelőn', desc: 'Ellátod a falu teheneit és bárányait a bekerített legelőn.', placeKey: 'legelo', costEnergy: 18, rewardCoins: 15, rewardXp: 12, rewardRes: { tej: 2 }, cooldownSec: 75, rewardLabel: '+15 Tallér, +2 🥛 Tej, +12 XP' },
-  { id: 'job_pub', title: '🍺 Csapos műszak a Kocsmában', desc: 'Besegítesz a pult mögött a szomjas falubelieknek.', placeKey: 'kocsma', costEnergy: 25, rewardCoins: 28, rewardXp: 18, rewardRes: {}, cooldownSec: 120, rewardLabel: '+28 Tallér, +18 XP' },
+  { id: 'job_fish', minLevel: 1, placeKey: 'steg', toolKey: 'rod', baseCoins: 8, baseEnergy: 12, baseXp: 12, baseRes: { hal: 1 }, title: '🎣 Parti Horgászat a Stégen', desc: 'Kapitális pontyokra és harcsákra pecázol a folyón.' },
+  { id: 'job_milk', minLevel: 1, placeKey: 'legelo', toolKey: 'millstone', baseCoins: 9, baseEnergy: 14, baseXp: 14, baseRes: { tej: 1 }, title: '🐄 Állatgondozás & Fejés a Legelőn', desc: 'Ellátod a falu teheneit és bárányait a bekerített legelőn.' },
+  { id: 'job_wood', minLevel: 1, placeKey: 'vadaszhaz', toolKey: 'axe', baseCoins: 10, baseEnergy: 15, baseXp: 15, baseRes: { fa: 1 }, title: '🪓 Favágás a Vadászháznál', desc: 'Kivágod és felaprítod a tűzifát az északi erdőszélen.' },
+  { id: 'job_mill', minLevel: 2, placeKey: 'malom', toolKey: 'millstone', baseCoins: 15, baseEnergy: 18, baseXp: 20, baseRes: { liszt: 1 }, title: '🌾 Búzaőrlés a Szélmalomban', desc: 'Megőrlöd a friss búzát a dombtetőn álló malomban.' },
+  { id: 'job_bridge', minLevel: 2, placeKey: 'hid', toolKey: 'scales', baseCoins: 18, baseEnergy: 18, baseXp: 22, baseRes: {}, title: '🛡️ Hídőrség és Vámkezelés a Fahídon', desc: 'Ellenőrzöd a fahídon átkelő szekereket és vándorokat.' },
+  { id: 'job_market', minLevel: 3, placeKey: 'piac', toolKey: 'scales', baseCoins: 24, baseEnergy: 20, baseXp: 28, baseRes: {}, title: '🧀 Piaci Kereskedő & Portékaárus', desc: 'Friss sajtot, mézet és fűszereket árulsz a színes standoknál.' },
+  { id: 'job_pub', minLevel: 3, placeKey: 'kocsma', toolKey: 'scales', baseCoins: 28, baseEnergy: 22, baseXp: 32, baseRes: {}, title: '🍺 Csapos Műszak a Kocsmában', desc: 'Besegítesz a pult mögött a szomjas falubelieknek.' },
+  { id: 'job_hunt', minLevel: 4, placeKey: 'vadaszhaz', toolKey: 'axe', baseCoins: 36, baseEnergy: 25, baseXp: 42, baseRes: { fa: 2 }, title: '🏹 Erdei Fővadász Expedíció', desc: 'Hosszabb erdei portyára indulsz a vadregényes északi tájon.' },
+  { id: 'job_carpenter', minLevel: 5, placeKey: 'malom', toolKey: 'millstone', baseCoins: 48, baseEnergy: 28, baseXp: 55, baseRes: { fa: 2, liszt: 1 }, title: '⚒️ Falusi Építőmester & Ácsbrigád', desc: 'Gerendákat faragsz és a malom szerkezetét erősíted.' },
+  { id: 'job_magistrate', minLevel: 6, placeKey: 'tuz', toolKey: 'scales', baseCoins: 65, baseEnergy: 30, baseXp: 75, baseRes: { fa: 1, liszt: 1, hal: 1, tej: 1 }, title: '👑 Főtéri Falubíró & Bogrács-Felügyelő', desc: 'Szervezed a falu életét, ítélkezel és felügyeled a főtéri készleteket.' },
 ];
 
+const REST_HOURS_OPTIONS = [1, 2, 4, 6, 8];
+
 const REST_OPTIONS = [
-  { id: 'rest_home', title: '🛌 Alvás a Saját Házadban', desc: 'Hazatérsz a saját ágyadba és kipihened magad (5 perc Cooldown).', costCoins: 0, deltaEnergy: 55, deltaXp: 5, cooldownSec: 300, badge: 'Ingyenes → +55% Energia (⏳ 5p limit)', goHome: true },
-  { id: 'rest_bogracs', title: '🍲 Bográcsgulyás a Főtéren', desc: 'Egy tál tüzes falusi bográcsgulyás a Főtéren (1.5 perc Cooldown).', placeKey: 'tuz', costCoins: 14, deltaEnergy: 45, deltaXp: 10, cooldownSec: 90, badge: '-14 Tallér → +45% Energia, +10 XP' },
-  { id: 'rest_langos', title: '🥨 Fokhagymás-tejfölös Lángos a Piacon', desc: 'Frissen sült piaci lángos @langos_laci standjáról (1 perc Cooldown).', placeKey: 'piac', costCoins: 10, deltaEnergy: 35, deltaXp: 8, cooldownSec: 60, badge: '-10 Tallér → +35% Energia, +8 XP' },
-  { id: 'rest_well', title: '🪣 Jéghideg Kútvíz a Gémeskútnál', desc: 'Húzol egy vödör frissítő kútvizet (2 perc Cooldown).', placeKey: 'gemeskut', costCoins: 0, deltaEnergy: 15, deltaXp: 4, cooldownSec: 120, badge: 'Ingyenes → +15% Energia (⏳ 2p limit)' },
+  { id: 'rest_bogracs', title: '🍲 Bográcsgulyás a Főtéren', desc: 'Egy tál tüzes falusi bográcsgulyás a Főtéren (1.5 perc Cooldown).', placeKey: 'tuz', costCoins: 14, deltaEnergy: 45, deltaXp: 10, cooldownSec: 90, badge: '-14 Tallér → +45 ⚡ Energia, +10 XP' },
+  { id: 'rest_langos', title: '🥨 Fokhagymás-tejfölös Lángos a Piacon', desc: 'Frissen sült piaci lángos @langos_laci standjáról (1 perc Cooldown).', placeKey: 'piac', costCoins: 10, deltaEnergy: 35, deltaXp: 8, cooldownSec: 60, badge: '-10 Tallér → +35 ⚡ Energia, +8 XP' },
+  { id: 'rest_pub_drink', title: '🍺 Koccintás a Kocsmában', desc: 'Hideg frissítő és jókedv @csapos_bela pultjánál (1 perc Cooldown).', placeKey: 'kocsma', costCoins: 8, deltaEnergy: 25, deltaXp: 10, cooldownSec: 60, badge: '-8 Tallér → +25 ⚡ Energia, +10 XP' },
+  { id: 'rest_well', title: '🪣 Jéghideg Kútvíz a Gémeskútnál', desc: 'Húzol egy vödör frissítő kútvizet (2 perc Cooldown).', placeKey: 'gemeskut', costCoins: 0, deltaEnergy: 15, deltaXp: 4, cooldownSec: 120, badge: 'Ingyenes → +15 ⚡ Energia, +4 XP' },
+  { id: 'rest_foter_walk', title: '🏛️ Korzózás a Főtéren', desc: 'Könnyed séta és beszélgetés a falubeliek között (1.5 perc Cooldown).', placeKey: 'tuz', costCoins: 0, deltaEnergy: 10, deltaXp: 10, cooldownSec: 90, badge: 'Ingyenes → +10 ⚡ Energia, +10 XP' },
+  { id: 'rest_river', title: '🌊 Pihenés a Folyóparton', desc: 'Megpihensz a horgászstégen a folyó csobogása mellett (1.5 perc Cooldown).', placeKey: 'steg', costCoins: 0, deltaEnergy: 12, deltaXp: 5, cooldownSec: 90, badge: 'Ingyenes → +12 ⚡ Energia, +5 XP' },
+];
+
+const TOOL_UPGRADES = [
+  {
+    key: 'axe',
+    name: '🪓 Acél Favágó Fejsze',
+    desc: 'Erősíti a Favágást és a Fővadász Expedíciót (+12% Tallér/szint, -4% energiaigény/szint).',
+    costs: [
+      { coins: 45, res: { fa: 2 } },
+      { coins: 95, res: { fa: 4 } },
+      { coins: 175, res: { fa: 7 } },
+      { coins: 290, res: { fa: 11 } },
+      { coins: 450, res: { fa: 16 } },
+    ],
+  },
+  {
+    key: 'rod',
+    name: '🎣 Kőris Horgászbot',
+    desc: 'Növeli a Horgászat hozamát (+12% Tallér/szint, -4% energia/szint, 2. szinttől +1 🐟 Hal 3–4ó műszaknál).',
+    costs: [
+      { coins: 45, res: { fa: 1, hal: 1 } },
+      { coins: 95, res: { fa: 2, hal: 2 } },
+      { coins: 175, res: { fa: 4, hal: 3 } },
+      { coins: 290, res: { fa: 6, hal: 5 } },
+      { coins: 450, res: { fa: 8, hal: 8 } },
+    ],
+  },
+  {
+    key: 'millstone',
+    name: '⚙️ Céhes Malomkő & Sajtoló',
+    desc: 'Fejleszti a Fejést, Búzaőrlést és Építőmester munkát (+12% Tallér/szint, -4% energia/szint).',
+    costs: [
+      { coins: 50, res: { liszt: 1, tej: 1 } },
+      { coins: 100, res: { liszt: 2, tej: 2 } },
+      { coins: 185, res: { liszt: 4, tej: 3 } },
+      { coins: 300, res: { liszt: 6, tej: 5 } },
+      { coins: 460, res: { liszt: 8, tej: 8 } },
+    ],
+  },
+  {
+    key: 'scales',
+    name: '⚖️ Aranyozott Kereskedői Mérleg',
+    desc: 'Piaci nyersanyag-eladás +15%/szint, valamint Hídőrség/Piac/Kocsma/Falubíró +12% Tallér/szint.',
+    costs: [
+      { coins: 55, res: { fa: 1, liszt: 1 } },
+      { coins: 110, res: { fa: 2, hal: 2 } },
+      { coins: 195, res: { liszt: 3, tej: 3 } },
+      { coins: 320, res: { fa: 5, hal: 5 } },
+      { coins: 480, res: { fa: 6, liszt: 5, tej: 5 } },
+    ],
+  },
+  {
+    key: 'boots',
+    name: '🥾 Vándor Bőrcsizma',
+    desc: 'Növeli a Max Energiát (+10 ⚡/szint, max 150) és minden munka energiaigényét -4%/szinttel csökkenti.',
+    costs: [
+      { coins: 50, res: { tej: 2 } },
+      { coins: 105, res: { tej: 3, fa: 1 } },
+      { coins: 190, res: { tej: 4, hal: 3 } },
+      { coins: 310, res: { tej: 6, fa: 5 } },
+      { coins: 470, res: { tej: 8, liszt: 4, hal: 4 } },
+    ],
+  },
+];
+
+const CRAFT_RECIPES = [
+  {
+    id: 'recipe_bread',
+    title: '🥖 Kemencés Cipó',
+    desc: 'Ropogós falusi kenyér frissen őrölt lisztből és fűtőfából.',
+    minLevel: 1,
+    ingredients: { liszt: 2, fa: 1 },
+    sellCoins: 28,
+    sellXp: 12,
+    eatEnergy: 30,
+    eatXp: 6,
+    eatWellRested: false,
+  },
+  {
+    id: 'recipe_cheese',
+    title: '🧀 Érlelt Házi Sajt',
+    desc: 'Ízletes, aranyló házi sajt a legelő friss tejéből.',
+    minLevel: 2,
+    ingredients: { tej: 3 },
+    sellCoins: 34,
+    sellXp: 16,
+    eatEnergy: 35,
+    eatXp: 8,
+    eatWellRested: false,
+  },
+  {
+    id: 'recipe_fishsoup',
+    title: '🍲 Bográcsos Halászlé',
+    desc: 'Tüzes bográcsos halászlé — elfogyasztva ✨ Kipihent Lélek bónuszt ad!',
+    minLevel: 3,
+    ingredients: { hal: 2, fa: 1 },
+    sellCoins: 42,
+    sellXp: 20,
+    eatEnergy: 50,
+    eatXp: 12,
+    eatWellRested: true,
+  },
+  {
+    id: 'recipe_chest',
+    title: '🧰 Céhes Mesterláda',
+    desc: 'Becses falusi kézműves árucsomag piaci értékesítésre.',
+    minLevel: 4,
+    ingredients: { fa: 4, liszt: 2, tej: 2 },
+    sellCoins: 85,
+    sellXp: 40,
+    eatEnergy: 0,
+    eatXp: 0,
+    eatWellRested: false,
+  },
 ];
 
 const SHOP_ITEMS = [
-  { type: 'noveny', label: '🪴 Dézsás Szobanövény', desc: 'Dús zöld falusi dézsás növény a szoba sarkába.', costCoins: 65, costWood: 0 },
-  { type: 'lampa', label: '🕯️ Kovácsoltvas Állólámpa', desc: 'Meleg fényű 3D állólámpa a szobádba.', costCoins: 95, costWood: 2 },
-  { type: 'konyvespolc', label: '📚 Tölgyfa Könyvespolc', desc: 'Tömör tölgyfából ácsolt könyvespolc színes kötetekkel.', costCoins: 140, costWood: 5 },
-  { type: 'mini_fenyo', label: '🎄 Ünnepi Szobai Karácsonyfa', desc: 'Feldíszített fenyőfa arany csúcsdísszel a házadba.', costCoins: 180, costWood: 4 },
-  { type: 'kandallo', label: '🔥 Épített Kő Kandalló', desc: 'Lobogó tűzzel fűtött kő kandalló a szobád falához.', costCoins: 260, costWood: 8 },
-  { type: 'bogracs_disz', label: '🍲 Arany Bogrács Vándorkupa', desc: 'A falu legfényesebb presztízs dísztárgya a szobádba.', costCoins: 420, costWood: 0 },
+  { type: 'noveny', label: '🪴 Dézsás Szobanövény', desc: 'Dús zöld falusi dézsás növény a szoba sarkába (+5% alvás komfort).', costCoins: 65, costWood: 0 },
+  { type: 'lampa', label: '🕯️ Kovácsoltvas Állólámpa', desc: 'Meleg fényű 3D állólámpa a szobádba (+5% alvás komfort).', costCoins: 95, costWood: 2 },
+  { type: 'konyvespolc', label: '📚 Tölgyfa Könyvespolc', desc: 'Tömör tölgyfából ácsolt könyvespolc színes kötetekkel (+5% alvás komfort).', costCoins: 140, costWood: 5 },
+  { type: 'mini_fenyo', label: '🎄 Ünnepi Szobai Karácsonyfa', desc: 'Feldíszített fenyőfa arany csúcsdísszel a házadba (+5% alvás komfort).', costCoins: 180, costWood: 4 },
+  { type: 'kandallo', label: '🔥 Épített Kő Kandalló', desc: 'Lobogó tűzzel fűtött kő kandalló a szobád falához (+5% alvás komfort).', costCoins: 260, costWood: 8 },
+  { type: 'bogracs_disz', label: '🍲 Arany Bogrács Vándorkupa', desc: 'A falu legfényesebb presztízs dísztárgya a szobádba (+5% alvás komfort).', costCoins: 420, costWood: 0 },
 ];
 
 const DAILY_QUESTS = [
@@ -5963,62 +6456,312 @@ const DAILY_QUESTS = [
   { id: 'q_foter', title: '🏛️ Közösségi élet: Látogass el a Főtérre!', rewardCoins: 20, check: () => Boolean(playerRpg.stats.visitedFoter), progressText: () => playerRpg.stats.visitedFoter ? 'Teljesítve ✓' : 'Kattints a Főtérre!' },
   { id: 'q_vote', title: '🗳️ Demokratikus falu: Adj le szavazatot a Falugyűlésen!', rewardCoins: 25, check: () => Boolean(playerRpg.stats.votedOption), progressText: () => playerRpg.stats.votedOption ? 'Szavaztál ✓' : 'Válassz épületet lent!' },
   { id: 'q_shop', title: '🛋️ Otthonépítő: Vásárolj vagy barkácsolj 1 bútort a Bútorboltban!', rewardCoins: 45, check: () => Boolean(playerRpg.stats.boughtFurniture), progressText: () => playerRpg.stats.boughtFurniture ? 'Teljesítve ✓' : '0 / 1 bútor' },
+  { id: 'q_tool', title: '⚒️ Céhes mester: Fejlessz 1 szerszámot a Céhben!', rewardCoins: 40, check: () => (playerRpg.stats.toolsUpgraded || 0) >= 1, progressText: () => `${Math.min(1, playerRpg.stats.toolsUpgraded || 0)} / 1 fejlesztés` },
+  { id: 'q_craft', title: '🥖 Falusi kézműves: Készíts 1 kézműves terméket!', rewardCoins: 35, check: () => (playerRpg.stats.itemsCrafted || 0) >= 1, progressText: () => `${Math.min(1, playerRpg.stats.itemsCrafted || 0)} / 1 termék` },
 ];
 
-function startInteractiveJob(job) {
-  if (workTimer) return;
-  const cdRem = getCooldownRemainingSec(job.id);
-  if (cdRem > 0) {
-    showMenuToast(`⏳ Ezt a munkát még nem végezheted újra! Várakozási idő: ${formatCooldown(cdRem)}.`, true);
-    return;
+function getJobMasteryInfo(jobId) {
+  const hours = Number(playerRpg?.jobMasteryHours?.[jobId] || 0);
+  if (hours >= 25) {
+    return { tier: 'Nagymester', hours, coinBonus: 0.50, xpBonus: 0.20, extraRes: 1, nextTierHours: null };
   }
-  if (playerRpg.energy < job.costEnergy) {
-    showMenuToast(`⚠️ Nincs elég energiád (${job.costEnergy}% szükséges)! Válts a „🍲 Pihenés” fülre!`, true);
-    return;
+  if (hours >= 10) {
+    return { tier: 'Mester', hours, coinBonus: 0.25, xpBonus: 0, extraRes: 1, nextTierHours: 25 };
   }
+  if (hours >= 4) {
+    return { tier: 'Segéd', hours, coinBonus: 0.10, xpBonus: 0, extraRes: 0, nextTierHours: 10 };
+  }
+  return { tier: 'Inas', hours, coinBonus: 0, xpBonus: 0, extraRes: 0, nextTierHours: 4 };
+}
+
+function calculateJobShift(job, hours = 1) {
+  const h = SHIFT_HOURS_OPTIONS.includes(Number(hours)) ? Number(hours) : 1;
+  const { lvl, coinBonusPct } = getPlayerLevelInfo();
+  const toolLevels = playerRpg?.toolLevels || {};
+  const toolLvl = Number(toolLevels[job.toolKey] || 0);
+  const bootsLvl = Number(toolLevels.boots || 0);
+  const mastery = getJobMasteryInfo(job.id);
+
+  const energyReduction = Math.min(0.60, toolLvl * 0.04 + bootsLvl * 0.04);
+  const energyCost = Math.max(5, Math.round(job.baseEnergy * SHIFT_ENERGY_MULT[h] * (1 - energyReduction)));
+
+  const lvlBonus = coinBonusPct / 100;
+  const toolBonus = toolLvl * 0.12;
+  const masteryBonus = mastery.coinBonus;
+  const wellRestedCoinBonus = playerRpg?.wellRested ? 0.10 : 0;
+  const wellRestedXpBonus = playerRpg?.wellRested ? 0.15 : 0;
+
+  const rewardCoins = Math.round(
+    job.baseCoins * SHIFT_COIN_MULT[h] * (1 + lvlBonus + toolBonus + masteryBonus + wellRestedCoinBonus)
+  );
+  const rewardXp = Math.round(
+    job.baseXp * SHIFT_XP_MULT[h] * (1 + mastery.xpBonus + wellRestedXpBonus)
+  );
+
+  const rewardRes = {};
+  const baseKeys = Object.keys(job.baseRes || {});
+  for (const [rk, baseAmt] of Object.entries(job.baseRes || {})) {
+    rewardRes[rk] = baseAmt * SHIFT_RES_MULT[h];
+  }
+  if (mastery.extraRes > 0 && baseKeys.length > 0) {
+    const primaryRes = baseKeys[0];
+    rewardRes[primaryRes] = (rewardRes[primaryRes] || 0) + mastery.extraRes;
+  }
+  if (job.id === 'job_fish' && h >= 3 && (toolLevels.rod || 0) >= 2) {
+    rewardRes.hal = (rewardRes.hal || 0) + 1;
+  }
+
+  return {
+    hours: h,
+    lvl,
+    mastery,
+    toolLvl,
+    bootsLvl,
+    energyCost,
+    rewardCoins,
+    rewardXp,
+    rewardRes,
+    hasWellRested: Boolean(playerRpg?.wellRested),
+    bonusNotes: [
+      coinBonusPct > 0 ? `+${coinBonusPct}% szint` : '',
+      toolLvl > 0 ? `+${toolLvl * 12}% szerszám` : '',
+      masteryBonus > 0 ? `+${Math.round(masteryBonus * 100)}% ${mastery.tier}` : '',
+      playerRpg?.wellRested ? '+10% T / +15% XP Kipihent Lélek' : '',
+    ].filter(Boolean),
+  };
+}
+
+function calculateRestShift(hours = 8) {
+  const h = REST_HOURS_OPTIONS.includes(Number(hours)) ? Number(hours) : 8;
+  const baseGain = h * 10;
+  const comfortCount = Math.max(0, Math.min(6, Number(playerRpg?.comfortBonusCount || 0)));
+  const comfortPct = Math.min(0.30, comfortCount * 0.05);
+  const comfortBonus = Math.round(baseGain * comfortPct);
+  const energyGain = baseGain + comfortBonus;
+  const grantsWellRested = h >= 4;
+  const xpGain = h >= 4 ? h * 2 : h;
+  return {
+    hours: h,
+    baseGain,
+    comfortCount,
+    comfortPct: Math.round(comfortPct * 100),
+    comfortBonus,
+    energyGain,
+    grantsWellRested,
+    xpGain,
+  };
+}
+
+function startTimedWorkShift(job, hours = 1, feedbackEl = null) {
+  if (!playerRpg || !job) return false;
+  if (playerRpg.activeTask) {
+    notifyActionResult('⏳ Már folyamatban van egy feladat! Fejezd be, gyorsítsd fel vagy szakítsd meg előbb.', true, feedbackEl);
+    return false;
+  }
+  const { lvl } = getPlayerLevelInfo();
+  if (lvl < job.minLevel) {
+    notifyActionResult(`🔒 Ez a munka a ${job.minLevel}. szinttől érhető el! (Jelenlegi szinted: ${lvl}.)`, true, feedbackEl);
+    return false;
+  }
+
+  const shift = calculateJobShift(job, hours);
+  if (playerRpg.energy < shift.energyCost) {
+    notifyActionResult(`⚠️ Nincs elég energiád (${shift.energyCost} ⚡ szükséges)! Pihenj otthon vagy egyél a faluban!`, true, feedbackEl);
+    return false;
+  }
+
   const p = PLACES[job.placeKey];
   if (p) flyTo(p.x, p.z, 32);
 
-  const progBox = el('work-progress-box');
-  const progFill = el('work-bar-fill');
-  el('work-progress-title').textContent = `${job.title} folyamatban…`;
-  progBox.hidden = false;
-  progFill.style.width = '0%';
-  el('menu-toast').hidden = true;
+  playerRpg.energy = Math.max(0, playerRpg.energy - shift.energyCost);
+  playerRpg.lastEnergyUpdate = Date.now();
+  const consumedWellRested = Boolean(playerRpg.wellRested);
+  if (consumedWellRested) playerRpg.wellRested = false;
 
-  let step = 0;
-  workTimer = setInterval(() => {
-    step += 10;
-    progFill.style.width = `${step}%`;
-    if (step >= 100) {
-      clearInterval(workTimer);
-      workTimer = null;
-      progBox.hidden = true;
-      playerRpg.energy = Math.max(0, playerRpg.energy - job.costEnergy);
-      playerRpg.lastEnergyUpdate = Date.now();
-      playerRpg.coins += job.rewardCoins;
-      playerRpg.xp += job.rewardXp;
-      playerRpg.stats.worksDone = (playerRpg.stats.worksDone || 0) + 1;
-      for (const [rk, rv] of Object.entries(job.rewardRes || {})) {
-        playerRpg.resources[rk] = (playerRpg.resources[rk] || 0) + rv;
-      }
-      setActionCooldown(job.id, job.cooldownSec);
-      savePlayerRpg();
-      showMenuToast(`✓ Sikeres munka: ${job.title}! Jutalom: ${job.rewardLabel} (Cooldown: ${formatCooldown(job.cooldownSec)})`);
-      renderActivitiesContent();
+  const now = Date.now();
+  const durationMs = shift.hours * 3600000;
+  playerRpg.activeTask = {
+    kind: 'work',
+    jobId: job.id,
+    placeKey: job.placeKey,
+    title: job.title,
+    label: job.title,
+    hours: shift.hours,
+    startedAt: now,
+    endsAt: now + durationMs,
+    durationMs,
+    energyCost: shift.energyCost,
+    rewardCoins: shift.rewardCoins,
+    rewardXp: shift.rewardXp,
+    rewardRes: shift.rewardRes,
+    consumedWellRested,
+  };
+
+  savePlayerRpg();
+  syncActiveTaskUI();
+  const resTxt = formatResBundle(shift.rewardRes);
+  notifyActionResult(
+    `🔨 Elindult a ${shift.hours} órás műszak: ${job.title}! Várható jutalom: +${shift.rewardCoins} Tallér, +${shift.rewardXp} XP${resTxt ? `, ${resTxt}` : ''}.`,
+    false,
+    feedbackEl
+  );
+  if (el('activities-drawer') && !el('activities-drawer').hidden) renderActivitiesContent();
+  return true;
+}
+
+function startTimedRestShift(hours = 8, feedbackEl = null) {
+  if (!playerRpg) return false;
+  if (playerRpg.activeTask) {
+    notifyActionResult('⏳ Már folyamatban van egy feladat! Fejezd be, gyorsítsd fel vagy szakítsd meg előbb.', true, feedbackEl);
+    return false;
+  }
+
+  const rest = calculateRestShift(hours);
+  const now = Date.now();
+  const durationMs = rest.hours * 3600000;
+  playerRpg.activeTask = {
+    kind: 'rest',
+    placeKey: 'home',
+    title: '🛌 Otthoni pihenés',
+    label: `🛌 Otthoni pihenés (${rest.hours} óra)`,
+    hours: rest.hours,
+    startedAt: now,
+    endsAt: now + durationMs,
+    durationMs,
+    energyGain: rest.energyGain,
+    xpGain: rest.xpGain,
+    grantsWellRested: rest.grantsWellRested,
+  };
+
+  if (currentConnectedUser) {
+    const myRes = byName.get(currentConnectedUser.toLowerCase());
+    if (myRes && !feedbackEl) flyTo(myRes.x, myRes.z, 30);
+  }
+
+  savePlayerRpg();
+  syncActiveTaskUI();
+  notifyActionResult(
+    `🛌 Elindult a ${rest.hours} órás otthoni pihenés (+${rest.energyGain} ⚡ Energia, +${rest.xpGain} XP${rest.grantsWellRested ? ' + ✨ Kipihent Lélek' : ''})!`,
+    false,
+    feedbackEl
+  );
+  if (el('activities-drawer') && !el('activities-drawer').hidden) renderActivitiesContent();
+  return true;
+}
+
+function completeActiveTask(forceImmediate = false) {
+  const task = playerRpg?.activeTask;
+  if (!task) return false;
+  if (!forceImmediate && Date.now() < task.endsAt) return false;
+
+  playerRpg.activeTask = null;
+
+  if (task.kind === 'work') {
+    playerRpg.coins = (playerRpg.coins || 0) + (task.rewardCoins || 0);
+    playerRpg.xp = (playerRpg.xp || 0) + (task.rewardXp || 0);
+    for (const [rk, rv] of Object.entries(task.rewardRes || {})) {
+      playerRpg.resources[rk] = (playerRpg.resources[rk] || 0) + rv;
     }
-  }, 150);
+    playerRpg.stats.worksDone = (playerRpg.stats.worksDone || 0) + 1;
+    playerRpg.stats.totalHoursWorked = (playerRpg.stats.totalHoursWorked || 0) + (task.hours || 1);
+    if (!playerRpg.jobMasteryHours) playerRpg.jobMasteryHours = {};
+    playerRpg.jobMasteryHours[task.jobId] = (playerRpg.jobMasteryHours[task.jobId] || 0) + (task.hours || 1);
+    const resTxt = formatResBundle(task.rewardRes);
+    showMenuToast(
+      `🎉 Műszak kész (${task.hours} óra): ${task.title}! Jutalom: +${task.rewardCoins} Tallér, +${task.rewardXp} XP${resTxt ? `, ${resTxt}` : ''}`
+    );
+  } else if (task.kind === 'rest') {
+    const maxE = getMaxEnergy();
+    playerRpg.energy = Math.min(maxE, (playerRpg.energy || 0) + (task.energyGain || 0));
+    playerRpg.lastEnergyUpdate = Date.now();
+    playerRpg.xp = (playerRpg.xp || 0) + (task.xpGain || 0);
+    if (task.grantsWellRested) playerRpg.wellRested = true;
+    showMenuToast(
+      `☀️ Kipihented magad (${task.hours} óra)! +${task.energyGain} ⚡ Energia, +${task.xpGain} XP${task.grantsWellRested ? ' · ✨ Kipihent Lélek aktív!' : ''}`
+    );
+  }
+
+  savePlayerRpg();
+  syncActiveTaskUI();
+  if (el('activities-drawer') && !el('activities-drawer').hidden) renderActivitiesContent();
+  if (el('card') && !el('card').hidden) refreshCardLive(currentSec());
+  return true;
+}
+
+function cancelActiveTask() {
+  const task = playerRpg?.activeTask;
+  if (!task) return false;
+
+  const now = Date.now();
+  const durationMs = Math.max(1, Number(task.durationMs || (task.endsAt - task.startedAt) || (task.hours || 1) * 3600000));
+  const elapsedFraction = Math.max(0, Math.min(1, (now - task.startedAt) / durationMs));
+  const remainingFraction = Math.max(0, 1 - elapsedFraction);
+  const maxE = getMaxEnergy();
+
+  if (task.kind === 'work') {
+    const rawRefund = Math.round((task.energyCost || 0) * remainingFraction);
+    const refund = elapsedFraction <= 0.5
+      ? Math.max(Math.round((task.energyCost || 0) * 0.5), rawRefund)
+      : rawRefund;
+    playerRpg.energy = Math.min(maxE, (playerRpg.energy || 0) + refund);
+    playerRpg.lastEnergyUpdate = Date.now();
+    if (task.consumedWellRested) playerRpg.wellRested = true;
+    showMenuToast(`⏹️ Műszak megszakítva: ${task.title}. Visszakaptál +${refund} ⚡ Energiát.`);
+  } else if (task.kind === 'rest') {
+    const gained = Math.floor((task.energyGain || 0) * elapsedFraction);
+    playerRpg.energy = Math.min(maxE, (playerRpg.energy || 0) + gained);
+    playerRpg.lastEnergyUpdate = Date.now();
+    showMenuToast(`⏹️ Pihenés megszakítva. Feltöltődött energia: +${gained} ⚡.`);
+  }
+
+  playerRpg.activeTask = null;
+  savePlayerRpg();
+  syncActiveTaskUI();
+  if (el('activities-drawer') && !el('activities-drawer').hidden) renderActivitiesContent();
+  if (el('card') && !el('card').hidden) refreshCardLive(currentSec());
+  return true;
+}
+
+el('work-fastforward-btn')?.addEventListener('click', () => completeActiveTask(true));
+el('work-cancel-btn')?.addEventListener('click', () => cancelActiveTask());
+el('hud-active-task-open')?.addEventListener('click', () => {
+  openActivitiesDrawer(playerRpg?.activeTask?.kind === 'rest' ? 'rest' : 'work');
+});
+
+if (playerRpg?.activeTask && Date.now() >= playerRpg.activeTask.endsAt) {
+  completeActiveTask(false);
+}
+if (currentConnectedUser) {
+  refreshComfortCount();
 }
 
 function renderActivitiesContent() {
   const container = el('activities-content');
+  if (!container) return;
   container.replaceChildren();
+  syncActiveTaskUI();
+
+  const lvlInfo = getPlayerLevelInfo();
 
   if (activeMenuTab === 'work') {
-    // 1. Nyersanyag-eladás a Piacon kártya (60mp Cooldown)
+    // 0. Összesítő banner (szint bónusz, Kipihent Lélek, ledolgozott órák)
+    const banner = document.createElement('div');
+    banner.className = 'rpg-summary-banner';
+    banner.innerHTML = `
+      <div>
+        <b>⭐ ${lvlInfo.lvl}. szint · ${lvlInfo.title}</b>
+        <span>Globális munkabónusz: <b>+${lvlInfo.coinBonusPct}% Tallér</b> · Összes műszak: <b>${playerRpg.stats.totalHoursWorked || 0} óra</b></span>
+      </div>
+      ${playerRpg.wellRested ? '<span class="rested-badge">✨ Kipihent Lélek aktív (+10% Tallér, +15% XP)</span>' : '<span style="font-size:11.5px; color:var(--muted);">💡 Aludj 4+ órát otthon a ✨ Kipihent Lélek bónuszért!</span>'}
+    `;
+    container.append(banner);
+
+    // 1. Nyersanyag-eladás a Piacon kártya (60mp Cooldown + Mérleg bónusz)
     const r = playerRpg.resources;
     const totalResCount = (r.fa || 0) + (r.liszt || 0) + (r.hal || 0) + (r.tej || 0);
-    const sellValue = (r.fa || 0) * 5 + (r.liszt || 0) * 6 + (r.hal || 0) * 8 + (r.tej || 0) * 6;
+    const scalesLvl = Number(playerRpg.toolLevels?.scales || 0);
+    const baseSellValue = (r.fa || 0) * 5 + (r.liszt || 0) * 6 + (r.hal || 0) * 8 + (r.tej || 0) * 6;
+    const sellValue = Math.round(baseSellValue * (1 + scalesLvl * 0.15));
     const sellCd = getCooldownRemainingSec('sell_market');
 
     const sellCard = document.createElement('div');
@@ -6028,7 +6771,7 @@ function renderActivitiesContent() {
       <div class="menu-item-info">
         <b>⚖️ Nyersanyagok eladása a Falusi Piacon</b>
         <span>Raktárad: 🪵 ${r.fa} Fa (5T) · 🌾 ${r.liszt} Liszt (6T) · 🐟 ${r.hal} Hal (8T) · 🥛 ${r.tej} Tej (6T)</span>
-        <span class="reward-tag">Piaci érték: +${sellValue} Tallér</span>
+        <span class="reward-tag">Piaci érték: +${sellValue} Tallér${scalesLvl > 0 ? ` (⚖️ Mérleg: +${scalesLvl * 15}%)` : ''}</span>
         <span class="cooldown-tag">⏱️ Cooldown: 60 mp</span>
       </div>
     `;
@@ -6053,36 +6796,199 @@ function renderActivitiesContent() {
     sellCard.append(sellBtn);
     container.append(sellCard);
 
-    for (const job of WORK_JOBS) {
-      const rem = getCooldownRemainingSec(job.id);
+    const unlockedJobs = WORK_JOBS.filter((j) => lvlInfo.lvl >= j.minLevel);
+    const lockedJobs = WORK_JOBS.filter((j) => lvlInfo.lvl < j.minLevel);
+
+    const unlockedHeading = document.createElement('h3');
+    unlockedHeading.className = 'section-heading';
+    unlockedHeading.textContent = '🔨 Elérhető Műszakok (1–4 óra)';
+    container.append(unlockedHeading);
+
+    for (const job of unlockedJobs) {
+      if (!selectedJobHours[job.id]) selectedJobHours[job.id] = 1;
+      const curHours = selectedJobHours[job.id];
+      const shift = calculateJobShift(job, curHours);
+      const placeName = PLACES[job.placeKey]?.name || 'Falu';
+
       const card = document.createElement('div');
-      card.className = 'menu-item-card';
-      card.innerHTML = `
-        <div class="menu-item-info">
+      card.className = 'menu-item-card column-card';
+
+      const header = document.createElement('div');
+      header.className = 'menu-item-info';
+      const nextMasteryHint = shift.mastery.nextTierHours
+        ? ` · következő: ${shift.mastery.nextTierHours}ó`
+        : ' · MAX';
+      header.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
           <b>${job.title}</b>
-          <span>${job.desc} (Energiaigény: -${job.costEnergy}%)</span>
-          <span class="reward-tag">${job.rewardLabel}</span>
-          <span class="cooldown-tag">⏱️ Idő-limit: ${formatCooldown(job.cooldownSec)}</span>
+          <span class="mastery-badge" title="Ledolgozott órák: ${shift.mastery.hours}${nextMasteryHint}">🏅 ${shift.mastery.tier} (${shift.mastery.hours}ó)</span>
         </div>
+        <span>${job.desc} · Helyszín: <b>${placeName}</b></span>
       `;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'menu-act-btn';
-      btn.dataset.cdAction = job.id;
-      btn.dataset.readyText = '🔨 Munka indítása';
-      btn.disabled = rem > 0;
-      btn.textContent = rem > 0 ? `⏳ ${formatCooldown(rem)}` : '🔨 Munka indítása';
-      btn.addEventListener('click', () => startInteractiveJob(job));
-      card.append(btn);
+
+      const durWrap = document.createElement('div');
+      durWrap.className = 'duration-selector';
+
+      const previewEl = document.createElement('div');
+      previewEl.className = 'shift-preview';
+
+      const startBtn = document.createElement('button');
+      startBtn.type = 'button';
+      startBtn.className = 'menu-act-btn';
+
+      const updateJobCardPreview = (hrs) => {
+        selectedJobHours[job.id] = hrs;
+        const s = calculateJobShift(job, hrs);
+        durWrap.querySelectorAll('.dur-btn').forEach((db) => {
+          db.classList.toggle('active', Number(db.dataset.hours) === hrs);
+        });
+        const resTxt = formatResBundle(s.rewardRes);
+        const lowEnergy = playerRpg.energy < s.energyCost;
+        const bonusTxt = s.bonusNotes.length ? `<div style="flex:1 1 100%; margin-top:2px; font-size:11px; color:var(--green);">Bónuszok: ${s.bonusNotes.join(' · ')}</div>` : '';
+        previewEl.innerHTML = `
+          <div style="flex:1 1 100%;">
+            <b>⏱️ ${s.hours} órás műszak:</b>
+            <span style="color:${lowEnergy ? 'var(--red)' : 'inherit'}; font-weight:700;">⚡ -${s.energyCost} Energia</span> ·
+            <span class="reward-tag" style="display:inline;">💰 +${s.rewardCoins} Tallér</span> ·
+            <span>✨ +${s.rewardXp} XP</span>${resTxt ? ` · <span>📦 ${resTxt}</span>` : ''}
+          </div>
+          ${bonusTxt}
+        `;
+        if (playerRpg.activeTask) {
+          startBtn.disabled = true;
+          startBtn.textContent = '⏳ Másik feladat folyamatban';
+        } else {
+          startBtn.disabled = false;
+          startBtn.textContent = `🔨 Műszak indítása (${s.hours} óra)`;
+        }
+      };
+
+      for (const hrs of SHIFT_HOURS_OPTIONS) {
+        const db = document.createElement('button');
+        db.type = 'button';
+        db.className = `dur-btn ${hrs === curHours ? 'active' : ''}`;
+        db.dataset.hours = String(hrs);
+        db.textContent = `${hrs} óra`;
+        db.addEventListener('click', () => updateJobCardPreview(hrs));
+        durWrap.append(db);
+      }
+
+      startBtn.addEventListener('click', () => startTimedWorkShift(job, selectedJobHours[job.id]));
+
+      card.append(header, durWrap, previewEl, startBtn);
+      updateJobCardPreview(curHours);
       container.append(card);
+    }
+
+    if (lockedJobs.length) {
+      const lockedHeading = document.createElement('h3');
+      lockedHeading.className = 'section-heading';
+      lockedHeading.textContent = '🔒 Magasabb szinten feloldható munkák';
+      container.append(lockedHeading);
+
+      for (const job of lockedJobs) {
+        const baseResTxt = formatResBundle(job.baseRes);
+        const card = document.createElement('div');
+        card.className = 'menu-item-card column-card locked';
+        card.innerHTML = `
+          <div class="menu-item-info">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+              <b>${job.title}</b>
+              <span class="lock-badge">🔒 ${job.minLevel}. szinttől</span>
+            </div>
+            <span>${job.desc}</span>
+            <span class="cooldown-tag">1 órás alap jutalom: +${job.baseCoins} Tallér, +${job.baseXp} XP${baseResTxt ? `, ${baseResTxt}` : ''} (-${job.baseEnergy} ⚡)</span>
+          </div>
+        `;
+        container.append(card);
+      }
     }
     return;
   }
 
   if (activeMenuTab === 'rest') {
+    const maxE = getMaxEnergy();
+    const comfortCount = Math.max(0, Math.min(6, Number(playerRpg.comfortBonusCount || 0)));
+    const banner = document.createElement('div');
+    banner.className = 'rpg-summary-banner';
+    banner.innerHTML = `
+      <div>
+        <b>⚡ Energia: ${playerRpg.energy} / ${maxE}</b>
+        <span>🛋️ Otthoni komfort bútorok: <b>${comfortCount}/6</b> (+${comfortCount * 5}% energia alváskor)</span>
+      </div>
+      ${playerRpg.wellRested ? '<span class="rested-badge">✨ Kipihent Lélek aktív (+10% Tallér, +15% XP)</span>' : '<span style="font-size:11.5px; color:var(--muted);">🏡 4+ órás otthoni alvás ad ✨ Kipihent Lelket!</span>'}
+    `;
+    container.append(banner);
+
+    // 1. Időzített Otthoni Pihenés kártya (1–8 óra)
+    const restCard = document.createElement('div');
+    restCard.className = 'menu-item-card column-card';
+
+    const restInfo = document.createElement('div');
+    restInfo.className = 'menu-item-info';
+    restInfo.innerHTML = `
+      <b>🛌 Otthoni Pihenés & Alvás (1–8 óra)</b>
+      <span>Húzz le egy csendes alvást a saját házadban! 8 óra alapból +80 Energiát ad, és minden elhelyezett komfort bútor +5%-kal növeli (max +30%).</span>
+    `;
+
+    const restDurWrap = document.createElement('div');
+    restDurWrap.className = 'duration-selector';
+    const restPreview = document.createElement('div');
+    restPreview.className = 'shift-preview';
+    const restStartBtn = document.createElement('button');
+    restStartBtn.type = 'button';
+    restStartBtn.className = 'menu-act-btn';
+
+    const updateRestPreview = (hrs) => {
+      selectedRestHours = hrs;
+      const r = calculateRestShift(hrs);
+      restDurWrap.querySelectorAll('.dur-btn').forEach((db) => {
+        db.classList.toggle('active', Number(db.dataset.hours) === hrs);
+      });
+      restPreview.innerHTML = `
+        <div style="flex:1 1 100%;">
+          <b>⏱️ ${r.hours} órás pihenés:</b>
+          <span class="reward-tag" style="display:inline;">⚡ +${r.energyGain} Energia</span>
+          (Alap: +${r.baseGain}${r.comfortBonus > 0 ? ` + Komfort: +${r.comfortBonus}` : ''}) ·
+          <span>✨ +${r.xpGain} XP</span>
+        </div>
+        <div style="flex:1 1 100%; margin-top:2px; font-size:11px; color:${r.grantsWellRested ? 'var(--green)' : 'var(--muted)'};">
+          ${r.grantsWellRested ? '✨ Megadja a Kipihent Lélek bónuszt (+10% Tallér, +15% XP a következő műszakra)!' : 'ℹ️ Válassz legalább 4 órát a ✨ Kipihent Lélek bónuszhoz.'}
+        </div>
+      `;
+      if (playerRpg.activeTask) {
+        restStartBtn.disabled = true;
+        restStartBtn.textContent = '⏳ Másik feladat folyamatban';
+      } else {
+        restStartBtn.disabled = false;
+        restStartBtn.textContent = `🛌 Otthoni pihenés indítása (${r.hours} óra)`;
+      }
+    };
+
+    for (const hrs of REST_HOURS_OPTIONS) {
+      const db = document.createElement('button');
+      db.type = 'button';
+      db.className = `dur-btn ${hrs === selectedRestHours ? 'active' : ''}`;
+      db.dataset.hours = String(hrs);
+      db.textContent = `${hrs} óra`;
+      db.addEventListener('click', () => updateRestPreview(hrs));
+      restDurWrap.append(db);
+    }
+
+    restStartBtn.addEventListener('click', () => startTimedRestShift(selectedRestHours));
+    restCard.append(restInfo, restDurWrap, restPreview, restStartBtn);
+    updateRestPreview(selectedRestHours);
+    container.append(restCard);
+
+    // 2. Gyors falusi frissítők
+    const quickHeading = document.createElement('h3');
+    quickHeading.className = 'section-heading';
+    quickHeading.textContent = '🍲 Gyors Falusi Frissítők (Azonnali)';
+    container.append(quickHeading);
+
     for (const ro of REST_OPTIONS) {
       const rem = getCooldownRemainingSec(ro.id);
-      const readyLabel = ro.costCoins ? `🍲 Fogyasztás (${ro.costCoins} T)` : '🛌 Pihenés';
+      const readyLabel = ro.costCoins ? `🍲 Fogyasztás (${ro.costCoins} T)` : '🌿 Frissülés';
       const card = document.createElement('div');
       card.className = 'menu-item-card';
       card.innerHTML = `
@@ -6110,18 +7016,173 @@ function renderActivitiesContent() {
           showMenuToast(`⚠️ Nincs elég Tallérod (${ro.costCoins} Tallér szükséges)!`, true);
           return;
         }
+        const curMaxE = getMaxEnergy();
         playerRpg.coins -= ro.costCoins;
-        playerRpg.energy = Math.min(100, playerRpg.energy + ro.deltaEnergy);
+        playerRpg.energy = Math.min(curMaxE, playerRpg.energy + ro.deltaEnergy);
         playerRpg.lastEnergyUpdate = Date.now();
         playerRpg.xp += ro.deltaXp;
         setActionCooldown(ro.id, ro.cooldownSec);
         savePlayerRpg();
-        if (ro.goHome) flyToMyOwnHouse();
-        else if (ro.placeKey && PLACES[ro.placeKey]) flyTo(PLACES[ro.placeKey].x, PLACES[ro.placeKey].z, 32);
-        showMenuToast(`✓ Feltöltődtél: ${ro.title}! Energiád most ${playerRpg.energy}%. (Cooldown: ${formatCooldown(ro.cooldownSec)})`);
+        if (ro.placeKey && PLACES[ro.placeKey]) flyTo(PLACES[ro.placeKey].x, PLACES[ro.placeKey].z, 32);
+        showMenuToast(`✓ Feltöltődtél: ${ro.title}! Energiád most ${playerRpg.energy}/${curMaxE} ⚡. (Cooldown: ${formatCooldown(ro.cooldownSec)})`);
         renderActivitiesContent();
       });
       card.append(btn);
+      container.append(card);
+    }
+    return;
+  }
+
+  if (activeMenuTab === 'upgrades') {
+    const maxE = getMaxEnergy();
+    const banner = document.createElement('div');
+    banner.className = 'rpg-summary-banner';
+    banner.innerHTML = `
+      <div>
+        <b>⭐ ${lvlInfo.lvl}. szint · ${lvlInfo.title}</b>
+        <span>XP: <b>${lvlInfo.isMaxLevel ? `${lvlInfo.currentXp} (MAX)` : `${lvlInfo.currentXp} / ${lvlInfo.nextLevelXp}`}</b> · Globális bónusz: <b>+${lvlInfo.coinBonusPct}% Tallér</b> · Max Energia: <b>${maxE} ⚡</b></span>
+      </div>
+    `;
+    container.append(banner);
+
+    const toolsHeading = document.createElement('h3');
+    toolsHeading.className = 'section-heading';
+    toolsHeading.textContent = '⚒️ Szerszámok & Felszerelés Fejlesztése (0 → 5. szint)';
+    container.append(toolsHeading);
+
+    for (const tool of TOOL_UPGRADES) {
+      const curLvl = Math.max(0, Math.min(5, Number(playerRpg.toolLevels?.[tool.key] || 0)));
+      const nextCost = curLvl < 5 ? tool.costs[curLvl] : null;
+      const dotsHtml = Array.from({ length: 5 }, (_, idx) => (
+        `<span class="level-dot ${idx < curLvl ? 'filled' : ''}"></span>`
+      )).join('');
+
+      const card = document.createElement('div');
+      card.className = 'menu-item-card column-card upgrade-card';
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <b>${tool.name}</b>
+            <div class="level-dots" title="${curLvl}/5">${dotsHtml}<span style="margin-left:4px; font-size:11.5px; font-weight:700;">${curLvl}/5</span></div>
+          </div>
+          <span>${tool.desc}</span>
+          ${nextCost
+            ? `<span class="reward-tag">Következő (${curLvl + 1}. sz.) ára: ${nextCost.coins} Tallér${Object.keys(nextCost.res).length ? ` + ${formatCostRes(nextCost.res)}` : ''}</span>`
+            : '<span class="reward-tag">🏆 Maximális mesterszint elérve!</span>'}
+        </div>
+      `;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-act-btn';
+      btn.disabled = !nextCost;
+      btn.textContent = nextCost ? `⚒️ Fejlesztés (${curLvl + 1}. szint)` : '✓ Max Szint';
+      btn.addEventListener('click', () => {
+        if (!nextCost) return;
+        if (playerRpg.coins < nextCost.coins) {
+          showMenuToast(`⚠️ Nincs elég Tallérod (${nextCost.coins} Tallér szükséges)!`, true);
+          return;
+        }
+        if (!hasEnoughResources(nextCost.res)) {
+          showMenuToast(`⚠️ Nincs elég nyersanyagod (${formatCostRes(nextCost.res)} szükséges)!`, true);
+          return;
+        }
+        playerRpg.coins -= nextCost.coins;
+        spendResources(nextCost.res);
+        if (!playerRpg.toolLevels) playerRpg.toolLevels = {};
+        playerRpg.toolLevels[tool.key] = curLvl + 1;
+        playerRpg.maxEnergy = getMaxEnergy();
+        playerRpg.xp = (playerRpg.xp || 0) + 15 * (curLvl + 1);
+        playerRpg.stats.toolsUpgraded = (playerRpg.stats.toolsUpgraded || 0) + 1;
+        savePlayerRpg();
+        showMenuToast(`🎉 Fejlesztés kész: ${tool.name} (${curLvl + 1}. szint)! (+${15 * (curLvl + 1)} XP)`);
+        renderActivitiesContent();
+      });
+      card.append(btn);
+      container.append(card);
+    }
+
+    const craftHeading = document.createElement('h3');
+    craftHeading.className = 'section-heading';
+    craftHeading.textContent = '🧪 Kézműves Receptek & Céhes Alkotás';
+    container.append(craftHeading);
+
+    const rStock = playerRpg.resources;
+    for (const rec of CRAFT_RECIPES) {
+      const unlocked = lvlInfo.lvl >= rec.minLevel;
+      const ingParts = Object.entries(rec.ingredients).map(([k, amt]) => {
+        const meta = RESOURCE_META[k] || { icon: '', label: k };
+        const have = rStock[k] || 0;
+        return `<span style="color:${have >= amt ? 'var(--green)' : 'var(--red)'}; font-weight:700;">${amt} ${meta.icon} ${meta.label} (${have})</span>`;
+      }).join(' + ');
+
+      const card = document.createElement('div');
+      card.className = `menu-item-card column-card${unlocked ? '' : ' locked'}`;
+      card.innerHTML = `
+        <div class="menu-item-info">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <b>${rec.title}</b>
+            ${unlocked ? `<span class="mastery-badge">✓ ${rec.minLevel}. szint</span>` : `<span class="lock-badge">🔒 ${rec.minLevel}. szinttől</span>`}
+          </div>
+          <span>${rec.desc}</span>
+          <span>Hozzávalók: ${ingParts}</span>
+          <span class="reward-tag">Eladás: +${rec.sellCoins} Tallér, +${rec.sellXp} XP${rec.eatEnergy > 0 ? ` · Fogyasztás: +${rec.eatEnergy} ⚡${rec.eatWellRested ? ' + ✨ Kipihent Lélek' : ''}` : ''}</span>
+        </div>
+      `;
+
+      const actionsWrap = document.createElement('div');
+      actionsWrap.className = 'craft-actions';
+
+      const sellCraftBtn = document.createElement('button');
+      sellCraftBtn.type = 'button';
+      sellCraftBtn.className = 'menu-act-btn';
+      sellCraftBtn.disabled = !unlocked;
+      sellCraftBtn.textContent = unlocked ? `💰 Eladás (+${rec.sellCoins} T)` : `🔒 ${rec.minLevel}. szint`;
+      sellCraftBtn.addEventListener('click', () => {
+        if (!unlocked) return;
+        if (!hasEnoughResources(rec.ingredients)) {
+          showMenuToast(`⚠️ Nincs elég alapanyagod (${formatCostRes(rec.ingredients)} szükséges)!`, true);
+          return;
+        }
+        spendResources(rec.ingredients);
+        playerRpg.coins += rec.sellCoins;
+        playerRpg.xp += rec.sellXp;
+        playerRpg.stats.itemsCrafted = (playerRpg.stats.itemsCrafted || 0) + 1;
+        savePlayerRpg();
+        showMenuToast(`💰 Elkészítve és eladva: ${rec.title} (+${rec.sellCoins} Tallér, +${rec.sellXp} XP)!`);
+        renderActivitiesContent();
+      });
+      actionsWrap.append(sellCraftBtn);
+
+      if (rec.eatEnergy > 0) {
+        const eatCraftBtn = document.createElement('button');
+        eatCraftBtn.type = 'button';
+        eatCraftBtn.className = 'menu-act-btn secondary';
+        eatCraftBtn.disabled = !unlocked;
+        eatCraftBtn.textContent = `🍽️ Elfogyasztás (+${rec.eatEnergy}⚡${rec.eatWellRested ? ' + ✨' : ''})`;
+        eatCraftBtn.addEventListener('click', () => {
+          if (!unlocked) return;
+          if (!hasEnoughResources(rec.ingredients)) {
+            showMenuToast(`⚠️ Nincs elég alapanyagod (${formatCostRes(rec.ingredients)} szükséges)!`, true);
+            return;
+          }
+          spendResources(rec.ingredients);
+          const curMaxE = getMaxEnergy();
+          playerRpg.energy = Math.min(curMaxE, playerRpg.energy + rec.eatEnergy);
+          playerRpg.lastEnergyUpdate = Date.now();
+          playerRpg.xp += rec.eatXp;
+          if (rec.eatWellRested) playerRpg.wellRested = true;
+          playerRpg.stats.itemsCrafted = (playerRpg.stats.itemsCrafted || 0) + 1;
+          savePlayerRpg();
+          showMenuToast(
+            `🍽️ Elkészítve és elfogyasztva: ${rec.title} (+${rec.eatEnergy} ⚡ Energia, +${rec.eatXp} XP${rec.eatWellRested ? ' + ✨ Kipihent Lélek' : ''})!`
+          );
+          renderActivitiesContent();
+        });
+        actionsWrap.append(eatCraftBtn);
+      }
+
+      card.append(actionsWrap);
       container.append(card);
     }
     return;
@@ -6160,10 +7221,16 @@ function renderActivitiesContent() {
           showMenuToast('⚠️ Először lépj be a karaktereddel a „🔑 Belépés” menüben!', true);
           return;
         }
+        const respData = await resp.json().catch(() => null);
         playerRpg.coins -= si.costCoins;
         playerRpg.resources.fa -= si.costWood;
         playerRpg.xp += 20;
         playerRpg.stats.boughtFurniture = true;
+        if (Array.isArray(respData?.items)) {
+          playerRpg.comfortBonusCount = computeComfortCountFromItems(respData.items);
+        } else {
+          refreshComfortCount();
+        }
         savePlayerRpg();
         showMenuToast(`🎉 Megvásároltad: ${si.label}! Bekerült a saját szobádba!`);
       });
@@ -6398,15 +7465,22 @@ function renderActivitiesContent() {
   }
 }
 
-// Élő 1 másodperces időzítő a Cooldown gombokhoz és a passzív Energia-visszatöltéshez (+1% / 20 mp)
+// Élő 1 másodperces időzítő a Cooldown gombokhoz, az aktív időzített műszak/pihenéshez és a passzív Energia-visszatöltéshez
 setInterval(() => {
+  if (!playerRpg) return;
   const prevEnergy = playerRpg.energy;
   applyPassiveEnergyRegen(playerRpg);
   if (playerRpg.energy !== prevEnergy) {
     savePlayerRpg(false);
   }
 
-  if (!el('activities-drawer').hidden) {
+  if (playerRpg.activeTask && Date.now() >= playerRpg.activeTask.endsAt) {
+    completeActiveTask(false);
+  } else {
+    syncActiveTaskUI();
+  }
+
+  if (el('activities-drawer') && !el('activities-drawer').hidden) {
     const cdBtns = el('activities-content').querySelectorAll('button[data-cd-action]');
     cdBtns.forEach((btn) => {
       const aid = btn.dataset.cdAction;
@@ -6421,6 +7495,10 @@ setInterval(() => {
         btn.textContent = btn.dataset.readyText || 'Indítás';
       }
     });
+  }
+
+  if (selectedRes && el('card') && !el('card').hidden) {
+    el('card-status').textContent = statusTextFor(selectedRes, currentSec());
   }
 
   refreshCardActionButtonsCooldownUI();
@@ -6530,6 +7608,7 @@ function openActivitiesDrawer(tab = 'work') {
   if (el('activities-content')) el('activities-content').hidden = isHousesTab;
   if (isHousesTab) renderHousesDirectory();
   else renderActivitiesContent();
+  if (tab === 'rest' && currentConnectedUser) refreshComfortCount();
   syncResponsiveUIState();
 }
 
@@ -6600,7 +7679,8 @@ function selectResident(res, fly = true) {
   el('diary-box').hidden = false;
 
   const actions = [
-    { id: 'rest_home', label: '🛌 Pihenés a házban (+55% Energia, 5p Cooldown)', deltaEnergy: 55, deltaXp: 5, cooldownSec: 300, msg: `@${res.name} kipihente magát otthon! (+55% Energia)` },
+    { label: '🛌 Otthoni pihenés (8 óra)', startRestHours: 8 },
+    { label: '🍲 Pihenés & Időtartam választó (1–8 óra)', onClick: () => openActivitiesDrawer('rest') },
     { label: `🔨 Munkába küldés (${PLACES[res.place]?.name || 'Falu'})`, onClick: () => selectLandmark(res.place === 'szabad' ? 'tuz' : res.place) },
   ];
   if (isMine) {
@@ -6655,9 +7735,11 @@ function selectHouse(res) {
   el('diary-box').hidden = true;
 
   const actions = [
-    { id: 'rest_home', label: '🛌 Pihenés / Alvás (+55% Energia, 5p Cooldown)', deltaEnergy: 55, deltaXp: 5, cooldownSec: 300, msg: 'Kipihented magad otthon! (+55% Energia)' },
-    { label: '🛋️ Szoba berendezése', onClick: () => enterHouseInterior(res.name) },
+    { label: '🛌 Otthoni pihenés (8 óra)', startRestHours: 8 },
+    { label: '🛋️ Pihenés & Időtartam választó (1–8 óra)', onClick: () => openActivitiesDrawer('rest') },
+    { label: '🚪 Szoba berendezése', onClick: () => enterHouseInterior(res.name) },
     { label: '🛍️ Új bútor vásárlása (Bútorbolt)', onClick: () => openActivitiesDrawer('shop') },
+    { label: '⚒️ Szerszámfejlesztés & Céh', onClick: () => openActivitiesDrawer('upgrades') },
   ];
   if (isMine) {
     actions.push({ label: '⚙️ Fiók / Másik ház választása', onClick: () => openClaimDrawer() });
@@ -6771,16 +7853,18 @@ function selectLandmark(placeKey) {
 }
 
 function refreshCardLive(sec) {
-  if (selectedRes && !el('diary-box').hidden) {
+  if (selectedRes) {
     el('card-status').textContent = statusTextFor(selectedRes, sec);
-    const diary = buildResidentDiary(selectedRes, sec);
-    el('diary-list').replaceChildren(...diary.map((d) => {
-      const li = document.createElement('li');
-      const t = document.createElement('time');
-      t.textContent = d.time;
-      li.append(t, d.label);
-      return li;
-    }));
+    if (!el('diary-box').hidden) {
+      const diary = buildResidentDiary(selectedRes, sec);
+      el('diary-list').replaceChildren(...diary.map((d) => {
+        const li = document.createElement('li');
+        const t = document.createElement('time');
+        t.textContent = d.time;
+        li.append(t, d.label);
+        return li;
+      }));
+    }
   } else if (selectedPlaceKey) {
     const here = residents.filter((r) => {
       const st = whereIs(r, sec);

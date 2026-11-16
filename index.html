@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Bográcsfalva – Közösségi 3D Falu</title>
   <style>html, body { margin: 0; padding: 0; background: #8fb24a; overflow: hidden; }</style>
-  <link rel="stylesheet" href="./styles.css?v=20261115-6">
+  <link rel="stylesheet" href="./styles.css?v=20261116-1">
   <script type="importmap">
   {
     "imports": {
@@ -89,8 +89,16 @@
             <span id="stat-energy-text" style="font-weight: 700; min-width: 110px;" title="Passzív töltődés: +1% Energia / 20 mp">⚡ 100% Energia</span>
             <div class="energy-track"><div id="stat-energy-fill"></div></div>
           </div>
+          <div class="xp-bar-wrap">
+            <span id="stat-xp-text">✨ 0 / 60 XP</span>
+            <div id="stat-xp-bar" class="xp-track"><div id="stat-xp-fill"></div></div>
+          </div>
           <div class="res-chips-row" id="stat-resources">
             <span>🪵 Fa: 0</span> · <span>🌾 Liszt: 0</span> · <span>🐟 Hal: 0</span> · <span>🥛 Tej: 0</span>
+          </div>
+          <div id="hud-active-task" hidden>
+            <span id="hud-active-task-text"></span>
+            <button id="hud-active-task-open" class="mini-btn" type="button">Megnyitás</button>
           </div>
         </div>
 
@@ -216,11 +224,12 @@
     <div class="sheet-handle" aria-hidden="true"></div>
     <button id="activities-close" class="close-x" aria-label="Bezárás">×</button>
     <h2>🎒 Falusi Élet & Menü</h2>
-    <p style="margin-bottom: 6px;">Vállalj munkát Tallérért és nyersanyagokért, töltődj fel a Főtéren vagy otthon, vásárolj új 3D bútorokat a szobádba, és szavazz a falu jövőjéről!</p>
+    <p style="margin-bottom: 6px;">Vállalj 1–4 órás műszakokat Tallérért és nyersanyagokért, töltődj fel otthoni pihenéssel, lépj szintet a szerszámfejlesztéshez és kézműves receptekhez, rendezz be 3D szobát és szavazz!</p>
 
     <div class="act-tabs drawer-tabs">
       <button class="act-tab drawer-tab active" data-acttab="work" data-tab="tab-work" type="button">🔨 Munka</button>
       <button class="act-tab drawer-tab" data-acttab="rest" data-tab="tab-rest" type="button">🍲 Pihenés</button>
+      <button class="act-tab drawer-tab" data-acttab="upgrades" data-tab="tab-upgrades" type="button">⚒️ Fejlesztés &amp; Céh</button>
       <button class="act-tab drawer-tab" data-acttab="shop" data-tab="tab-shop" type="button">🛋️ Bútorbolt</button>
       <button class="act-tab drawer-tab" data-acttab="community" data-tab="tab-community" type="button">🏛️ Küldetés & Szavazás</button>
       <button class="act-tab drawer-tab" data-acttab="leaderboard" data-tab="tab-leaderboard" type="button">🏆 Ranglista</button>
@@ -228,8 +237,16 @@
     </div>
 
     <div id="work-progress-box" hidden>
-      <b id="work-progress-title">🔨 Munka folyamatban…</b>
+      <div class="work-progress-header">
+        <b id="work-progress-title">🔨 Munka folyamatban…</b>
+        <span id="work-progress-timer" class="work-timer-badge">00:00:00</span>
+      </div>
       <div class="work-bar-track"><div id="work-bar-fill"></div></div>
+      <p id="work-progress-reward" class="work-progress-reward"></p>
+      <div class="work-progress-actions">
+        <button id="work-fastforward-btn" class="mini-btn work-ff-btn" type="button">⚡ Időugrás: Azonnali Befejezés (Teszt)</button>
+        <button id="work-cancel-btn" class="mini-btn work-cancel-btn" type="button">⏹️ Megszakítás</button>
+      </div>
     </div>
 
     <div id="menu-toast" hidden></div>
@@ -463,6 +480,6 @@
     </button>
   </nav>
 
-  <script type="module" src="./app.js?v=20261115-6"></script>
+  <script type="module" src="./app.js?v=20261116-1"></script>
 </body>
 </html>
